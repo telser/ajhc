@@ -3,6 +3,7 @@ module Util.UniqueMonad(UniqT,Uniq, runUniq, runUniqT, execUniq1, execUniq, exec
 
 import GenUtil
 import Data.Unique
+import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Identity
@@ -43,7 +44,7 @@ instance (Monad m, Monad (t m), MonadTrans t, UniqueProducer m) => UniqueProduce
 
 -- | Unique integer generator monad transformer.
 newtype UniqT m a = UniqT (StateT Int m a)
-    deriving(Monad,  MonadTrans, Functor, MonadFix, MonadPlus)
+    deriving(Applicative, Alternative,Monad,  MonadTrans, Functor, MonadFix, MonadPlus)
 
 instance MonadReader s m => MonadReader s (UniqT m) where
     ask = UniqT $  ask

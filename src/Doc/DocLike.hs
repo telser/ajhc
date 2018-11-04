@@ -5,6 +5,7 @@ module Doc.DocLike where
 
 -- arch-tag: a88f19fb-e18d-475f-b6d1-8da78676261a
 
+import Prelude hiding ((<$>))
 import Control.Monad.Reader()
 import qualified Text.PrettyPrint.HughesPJ as P
 

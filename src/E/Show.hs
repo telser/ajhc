@@ -4,6 +4,8 @@ import Control.Monad.Identity
 import Data.Char(chr)
 import Data.Maybe
 
+import Prelude hiding ((<$>))
+
 import Doc.DocLike
 import Doc.PPrint
 import Doc.Pretty
@@ -46,7 +48,7 @@ instance PPrint String (Lit E E) where
                       | otherwise = parens (prettyE (ELit x))
 
 newtype SEM a = SEM { _unSEM :: VarNameT E Id String Identity a }
-    deriving(Monad,Functor)
+    deriving(Applicative,Monad,Functor)
 
 enumList = [
     (tc_Bool_,["False#","True#"]),

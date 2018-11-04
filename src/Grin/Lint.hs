@@ -215,7 +215,7 @@ data TcEnv = TcEnv {
 }
 
 newtype Tc a = Tc (ReaderT TcEnv (Either String) a)
-    deriving(Monad,MonadReader TcEnv)
+    deriving(Applicative, Functor, Monad,MonadReader TcEnv)
 
 tcErr :: String -> Tc a
 tcErr s = Tc $ lift (Left s)

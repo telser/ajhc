@@ -512,7 +512,7 @@ class Monad m => OptionMonad m where
 instance OptionMonad Identity
 
 newtype OptT m a = OptT (ReaderT Opt m a)
-    deriving(MonadIO,Monad,Functor,MonadTrans)
+    deriving(Applicative,MonadIO,Monad,Functor,MonadTrans)
 
 type OptM = OptT Identity
 

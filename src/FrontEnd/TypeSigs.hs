@@ -25,7 +25,7 @@ import FrontEnd.Tc.Type
 import Name.Name
 
 newtype SC a = SC (Writer [HsDecl] a)
-    deriving(Monad)
+    deriving(Applicative, Functor, Monad)
 
 fromSC :: SC () -> [HsDecl]
 fromSC (SC m) = execWriter m

@@ -20,6 +20,7 @@ module FrontEnd.HsPretty (PPLayout(..),PPHsMode(..),
                 ppHsGuardedRhs
 		) where
 
+import Control.Monad
 import Data.Char
 import qualified Text.PrettyPrint.HughesPJ as P
 
@@ -81,6 +82,10 @@ instance Monad (DocM s) where
 	(>>=) = thenDocM
 	(>>) = then_DocM
 	return = retDocM
+
+instance Applicative (DocM s) where
+  pure = return
+  (<*>) = ap
 
 {-# INLINE thenDocM #-}
 {-# INLINE then_DocM #-}

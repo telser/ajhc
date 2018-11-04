@@ -47,7 +47,7 @@ import Support.FreeVars
 import Util.Graph
 import Util.HasSize
 import Util.NameMonad
-import Util.RWS
+import Util.RWS hiding(Alt)
 import Util.ReaderWriter
 import Util.SetLike as S
 import qualified E.Demand as Demand
@@ -83,7 +83,7 @@ programPruneOccurance prog =
        (progCombinators_s dsIn' prog) { progFreeIds = idMapToIdSet fvs, progUsedIds = uids }
 
 newtype OM a = OM (ReaderWriter IdSet (OMap,IdSet) a)
-    deriving(Monad,Functor,MonadWriter (OMap,IdSet),MonadReader IdSet)
+    deriving(Applicative, Monad,Functor,MonadWriter (OMap,IdSet),MonadReader IdSet)
 
 unOM (OM a) = a
 
@@ -1027,7 +1027,7 @@ data SmState = SmState {
 smState = SmState { idsSeed = 1, idsUsed = mempty, idsBound = mempty }
 
 newtype SM a = SM (RWS Env Stats.Stat SmState a)
-    deriving(Monad,Functor,MonadReader Env, MonadState SmState)
+    deriving(Applicative,Monad,Functor,MonadReader Env, MonadState SmState)
 
 localEnv f (SM action) = SM $ local (cacheSubst . f) action
 

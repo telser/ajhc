@@ -13,7 +13,6 @@ import Data.Maybe
 import Support.Compat
 import qualified Data.Set as Set
 
-import Data.Monoid
 import Doc.DocLike
 import Doc.PPrint
 import Doc.Pretty

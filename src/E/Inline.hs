@@ -9,8 +9,6 @@ module E.Inline(
     baseInlinability
     ) where
 
-import Control.Monad.Writer
-
 import E.Annotate
 import E.E
 import E.Program

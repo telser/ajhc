@@ -5,8 +5,6 @@ module E.FreeVars(
     freeIds
     ) where
 
-import Data.Monoid
-
 import E.Type
 import GenUtil
 import Name.Id

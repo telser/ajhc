@@ -23,6 +23,9 @@ instance Monad (Ms b) where
 instance Functor (Ms b) where
     fmap = liftM
 
+instance Applicative (Ms b) where
+    pure = return
+    (<*>) = ap
 unMs' (Ms' x) = x
 
 {-# INLINE getVal #-}

@@ -60,7 +60,7 @@ data ExpInfo = ExpInfo {
 -}
 
 newtype S a = S (RWS SEnv SCol SState a)
-    deriving(Monad,Functor,MonadWriter SCol, MonadReader SEnv,MonadState SState)
+    deriving(Applicative, Monad,Functor,MonadWriter SCol, MonadReader SEnv,MonadState SState)
 
 instance Stats.MonadStats S where
     mtickStat s = S (tell mempty { colStats = s })

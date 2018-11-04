@@ -10,6 +10,8 @@ import Data.Maybe
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
+import Prelude hiding ((<$>))
+
 import C.FFI hiding(Primitive)
 import C.Prims
 import Cmm.Op(ToCmmTy(..))
@@ -69,7 +71,7 @@ unboxedMap = [
     ]
 
 newtype C a = C (ReaderT LEnv IO a)
-    deriving(Monad,MonadReader LEnv,UniqueProducer,Functor,MonadIO,Stats.MonadStats)
+    deriving(Applicative, Monad,MonadReader LEnv,UniqueProducer,Functor,MonadIO,Stats.MonadStats)
 
 runC :: LEnv -> C a -> IO a
 runC lenv (C x) = runReaderT x lenv
@@ -180,7 +182,7 @@ compile prog@Program { progDataTable = dataTable } = do
         os <- onceMapToList errorOnce
         mapM_ print os
     let tf a = a:tagToFunction a
-    ds <- return $ flattenScc $ stronglyConnComp [ (a,x, concatMap tf (freeVars z)) | a@(x,(_ :-> z)) <- ds]
+    ds <- return $ flattenScc $ stronglyConnComp [ (a,x, concatMap tf ((freeVars z) :: [Atom])) | a@(x,(_ :-> z)) <- ds]
 
     -- FFI
     let tvrAtom t  = liftM convertName (fromId $ tvrIdent t)

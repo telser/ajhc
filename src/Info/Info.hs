@@ -22,6 +22,7 @@ module Info.Info(
 import Data.Dynamic
 import Data.Monoid
 import qualified Data.List as List
+import Data.Typeable(TypeRep(..), typeOf)
 
 import GenUtil
 import Util.HasSize

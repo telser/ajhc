@@ -523,6 +523,10 @@ instance Monad Tc where
         Left x <- typeError (Failure s) (tcDiagnostics st)
         liftIO $ fail x
 
+instance Applicative Tc where
+  pure = return
+  (<*>) = ap
+
 instance MonadWarn Tc where
     addWarning w = tell mempty { tcWarnings = Seq.singleton w }
 

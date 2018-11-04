@@ -12,7 +12,6 @@ module Ho.Collected(
 
 import Control.Monad.Identity
 import Data.List
-import Data.Monoid
 
 import DataConstructors
 import E.Annotate

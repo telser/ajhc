@@ -20,7 +20,7 @@ module Util.Seq( -- * Type
           , (<>)
 
             -- * Construction
-          , empty
+          , Util.Seq.empty
           , single
           , singleton
           , cons
@@ -32,6 +32,7 @@ module Util.Seq( -- * Type
           ) where
 
 import Data.Monoid(Monoid(..))
+import Control.Applicative (Alternative(..))
 import Control.Monad
 
 {--------------------------------------------------------------------
@@ -110,12 +111,20 @@ instance Monad Util.Seq.Seq where
     return x = Util.Seq.single x
     fail _ = Util.Seq.empty
 
+instance Applicative Util.Seq.Seq where
+  pure = return
+  (<*>) = ap
+
 instance MonadPlus Util.Seq.Seq where
     mplus = mappend
     mzero = Util.Seq.empty
 
 
 instance Monoid (Seq a) where
-    mempty = empty
+    mempty = Util.Seq.empty
     mappend = append
+
+instance Alternative Util.Seq.Seq where
+  empty = Util.Seq.empty
+  (<|>) = mappend
 

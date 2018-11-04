@@ -1,7 +1,6 @@
 module E.Values where
 
 import Control.Monad.Identity
-import Data.Monoid
 import Data.List
 import Data.Ratio
 

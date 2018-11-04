@@ -74,7 +74,7 @@ isValNamespace _ = False
 newtype Name = Name Atom
     deriving(Ord,Eq,Typeable,Binary,Data,ToAtom,FromAtom)
 
-isConstructorLike n =  isUpper x || x `elem` ":("  || xs == "->" || xs == "[]" where
+isConstructorLike n =  isUpper x || x `elem` (":(" :: String)  || xs == ("->" :: String) || xs == ("[]" :: String) where
     (_,_,xs@(x:_)) = nameParts n
 
 fromTypishHsName, fromValishHsName :: Name -> Name
@@ -156,7 +156,7 @@ parseName :: NameType -> String -> Name
 parseName t name = toName t (intercalate "." ms, intercalate "." (ns ++ [last sn])) where
     sn = (split (== '.') name)
     (ms,ns) = span validMod (init sn)
-    validMod (c:cs) = isUpper c && all (\c -> isAlphaNum c || c `elem` "_'") cs
+    validMod (c:cs) = isUpper c && all (\c -> isAlphaNum c || c `elem` ("_'" :: String)) cs
     validMod _ = False
 
 nameType :: Name -> NameType

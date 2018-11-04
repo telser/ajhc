@@ -2,6 +2,7 @@ module Info.Binary(putInfo, Info.Binary.getInfo) where
 
 import Data.Dynamic
 import qualified Data.Map as Map
+import Data.Typeable (TypeRep, typeOf)
 
 import C.FFI(FfiExport)
 import Data.Binary

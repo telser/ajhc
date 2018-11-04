@@ -24,9 +24,6 @@ instance Monoid Bool where
     mconcat = or
 
 
-instance Show a => Show (Identity a) where
-    show x = show $ runIdentity x
-
 
 #if __GLASGOW_HASKELL__ <= 610
 instance Traversable IM.IntMap where

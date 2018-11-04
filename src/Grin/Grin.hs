@@ -59,6 +59,8 @@ import Data.Monoid(Monoid(..))
 import Data.List(isPrefixOf)
 import qualified Data.Set as Set
 
+import Prelude hiding ((<$>))
+
 import C.FFI
 import C.Prims
 import Cmm.Number
@@ -526,7 +528,7 @@ instance FreeVars FuncProps (Set.Set Var) where
 instance FreeVars FuncProps (Set.Set Tag) where
     freeVars FuncProps { funcTags = fv } = fv
 
-instance FreeVars FuncProps a => FreeVars FuncDef a where
+instance (Monoid a, FreeVars FuncProps a) => FreeVars FuncDef a where
     freeVars fd = freeVars (funcDefProps fd)
 
 instance FreeVars Exp (Set.Set Var) where

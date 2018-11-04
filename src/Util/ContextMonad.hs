@@ -22,6 +22,10 @@ instance Monad ContextEither where
         Right v -> y v
     return x = ContextEither (Right x)
 
+instance Applicative ContextEither where
+  pure = return
+  (<*>) = ap
+
 instance ContextMonad ContextEither where
     type ContextOf ContextEither = String
     withContext s (ContextEither (Left ss)) = ContextEither (Left (s:ss))

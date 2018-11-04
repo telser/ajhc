@@ -9,9 +9,9 @@ module E.FromHs(
 import Data.Char
 import Control.Monad.Error
 import Control.Monad.Identity
-import Control.Monad.RWS
+import Control.Monad.RWS hiding (Alt)
 import Data.List(isPrefixOf,nub)
-import Prelude
+import Prelude hiding ((<$>))
 import Text.Printf
 import qualified Data.Map as Map
 import qualified Data.Traversable as T
@@ -92,7 +92,7 @@ tipe t = f t where
     f (TCon (Tycon n k)) =  ELit litCons { litName = n, litType = kind k }
     f (TVar tv) = EVar (cvar [] tv)
     f (TMetaVar mv) = cmvar mv
-    f (TForAll vs (ps :=> t)) = foldr EPi (f t) (map (cvar $ freeVars ps) vs)
+    f (TForAll vs (ps :=> t)) = foldr EPi (f t) (map (cvar $ ((freeVars ps) :: [Tyvar])) vs)
     f (TExists xs (_ :=> t)) = let
         xs' = map (kind . tyvarKind) xs
         in ELit litCons { litName = unboxedNameTuple TypeConstructor (length xs' + 1), litArgs = f t:xs', litType = eHash }
@@ -313,7 +313,7 @@ data CeEnv = CeEnv {
     }
 
 newtype C a = Ce (RWST CeEnv [Warning] Int IO a)
-    deriving(Monad,Functor,MonadIO,MonadReader CeEnv,MonadState Int,MonadError IOError)
+    deriving(Applicative,Monad,Functor,MonadIO,MonadReader CeEnv,MonadState Int,MonadError IOError)
 
 instance MonadWarn C where
     addWarning w = liftIO (addWarning w)
@@ -1028,6 +1028,6 @@ marshallFromC ce te = do
 
 extractUnboxedTup :: E -> ([E] -> C E) -> C E
 extractUnboxedTup e f = do
-    vs <- newVars $ concat (fromTuple_ (getType e))
+    vs <- newVars $ concat ((fromTuple_ (getType e)) :: [[E]])
     a <- f (map EVar vs)
     return $ eCaseTup' e vs a

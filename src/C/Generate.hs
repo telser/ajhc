@@ -86,6 +86,8 @@ import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Traversable as Seq
 
+import Prelude hiding ((<$>))
+
 import Doc.DocLike
 import Util.Gen
 import Util.SetLike
@@ -100,7 +102,7 @@ data Env = Env {
 emptyEnv = Env { envUsedLabels = mempty, envInScope = mempty }
 
 newtype G a = G (RWS Env [(Name,Type)] (Int,Map.Map [Type] Name) a)
-    deriving(Monad,MonadWriter [(Name,Type)],MonadState (Int,Map.Map [Type] Name),MonadReader Env,MonadFix)
+    deriving(Applicative,Functor,Monad,MonadWriter [(Name,Type)],MonadState (Int,Map.Map [Type] Name),MonadReader Env,MonadFix)
 
 newtype Name = Name String
     deriving(Eq,Ord)

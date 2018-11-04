@@ -22,24 +22,29 @@ import Support.CompatMingw32
 current_version :: Int
 current_version = 11
 
-readHFile :: FilePath -> IO (FilePath,HoHeader,forall a . Binary a => ChunkType -> a)
+readHFile :: FilePath -> IO (FilePath,HoHeader, [(ChunkType,BS.ByteString)])
 readHFile fn = do
     bs <- BS.readFile fn
     fn' <- shortenPath fn
     (ct,mp) <- bsCFF bs
     True <- return $ ct == cff_magic
-    let fc ct = case lookup ct mp of
-            Nothing -> error $ "No chunk '" ++ show ct ++ "' found in file " ++ fn
-            Just x -> decode . decompress $ LBS.fromChunks [x]
-    let hoh = fc cff_jhdr
+    let hoh = fc fn mp cff_jhdr
     when (hohVersion hoh /= current_version) $ fail "invalid version in hofile"
-    return (fn',hoh,fc)
+    return (fn',hoh,mp)
+
+fc :: Binary a => FilePath -> [(ChunkType,BS.ByteString)] -> ChunkType -> a
+fc fn mp ct = case lookup ct mp of
+  Nothing -> error $ "No chunk '" ++ show ct ++ "' found in file " ++ fn
+  Just x -> decode . decompress $ LBS.fromChunks [x]
 
 readHoFile :: FilePath -> IO (HoHeader,HoIDeps,Ho)
 readHoFile fn = do
-    (_fn,hoh,fc) <- readHFile fn
+    (_fn,hoh,mp) <- readHFile fn
     let Left modGroup = hohName hoh
-    return (hoh,fc cff_idep,Ho { hoModuleGroup = modGroup, hoTcInfo = fc cff_defs, hoBuild = fc cff_core})
+        idep = fc fn mp cff_idep
+        tcI = fc fn mp cff_defs
+        build = fc fn mp cff_core
+    return (hoh,idep,Ho { hoModuleGroup = modGroup, hoTcInfo = tcI, hoBuild = build})
 
 recordHoFile ::
     Ho               -- ^ File to record
@@ -103,10 +108,10 @@ recordHlFile l = do
 
 readHlFile :: FilePath -> IO Library
 readHlFile fn = do
-    (_fn',hoh,fc) <- readHFile fn
-    return Library { libHoHeader = hoh, libHoLib =  fc cff_libr,
-        libTcMap = fc cff_ldef, libBuildMap = fc cff_lcor,
-        libFileName = fn, libExtraFiles = fc cff_file }
+    (_fn',hoh,mp) <- readHFile fn
+    return Library { libHoHeader = hoh, libHoLib =  fc fn mp cff_libr,
+        libTcMap = fc fn mp cff_ldef, libBuildMap = fc fn mp cff_lcor,
+        libFileName = fn, libExtraFiles = fc fn mp cff_file }
 
 instance Binary ExtraFile where
     put (ExtraFile a b) = put (a,b)
@@ -163,10 +168,6 @@ instance Data.Binary.Binary HoLib where
     ac <- get
     ad <- get
     return (HoLib aa ab ac ad)
-
-instance Binary Data.Version.Version where
-    put (Data.Version.Version a b) = put a >> put b
-    get = liftM2 Data.Version.Version get get
 
 instance Data.Binary.Binary HoTcInfo where
     put (HoTcInfo aa ab ac ad ae af ag ah) = do

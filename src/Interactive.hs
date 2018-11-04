@@ -3,7 +3,6 @@ module Interactive(Interactive.interact, isInteractive) where
 import Control.Exception as CE
 import Control.Monad.Identity
 import Control.Monad.Reader
-import Data.Monoid
 import System.IO(stdout)
 import System.Environment
 import Data.List(sort,isPrefixOf)
@@ -76,7 +75,7 @@ isInitial = IS {
     }
 
 newtype In a = MkIn (ReaderT InteractiveState IO a)
-    deriving(MonadIO,Monad,Functor,MonadReader InteractiveState)
+    deriving(Applicative,MonadIO,Monad,Functor,MonadReader InteractiveState)
 
 runIn :: InteractiveState -> In a -> IO a
 runIn is (MkIn x) = runReaderT x is

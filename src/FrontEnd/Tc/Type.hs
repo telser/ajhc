@@ -250,7 +250,7 @@ instance FreeVars Type (S.Set MetaVar) where
 instance (FreeVars t b,FreeVars Pred b) => FreeVars (Qual t) b where
     freeVars (ps :=> t)  = freeVars t `mappend` freeVars ps
 
-instance FreeVars Type b =>  FreeVars Pred b where
+instance (Monoid b, FreeVars Type b) =>  FreeVars Pred b where
     freeVars (IsIn _c t)  = freeVars t
     freeVars (IsEq t1 t2)  = freeVars (t1,t2)
 

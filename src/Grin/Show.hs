@@ -14,6 +14,8 @@ import System.IO
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
+import Prelude hiding ((<$>))
+
 import C.Prims
 import Data.Graph.Inductive.Graph(mkGraph)
 import Data.Graph.Inductive.Tree

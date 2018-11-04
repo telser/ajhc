@@ -26,6 +26,10 @@ instance (Monoid w) => Monad (ReaderWriter r w) where
             (# _, w #) -> case g r of
                 (# a, w' #) -> let w'' = w `mappend` w' in w'' `seq` (# a, w'' #)
 
+instance (Monoid w) => Applicative (ReaderWriter r w) where
+  pure = return
+  (<*>) = ap
+
 instance (Monoid w) => MonadWriter w (ReaderWriter r w) where
 	tell   w = ReaderWriter $ \ _ -> w `seq` (# (), w #)
 	listen (ReaderWriter m) = ReaderWriter $ \r -> case m r of

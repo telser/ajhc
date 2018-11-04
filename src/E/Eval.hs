@@ -3,6 +3,7 @@ module E.Eval(eval, strong) where
 -- Simple lambda Calculus interpreter
 -- does not handle recursive Let or Case statements, but those don't appear in types anyway.
 
+import Prelude hiding ((<$>))
 import Data.Monoid
 import qualified Data.Map as Map
 

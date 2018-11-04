@@ -119,7 +119,7 @@ class Monad m => MonadStats m where
     mtickStat :: Stat -> m ()
 
 newtype StatT m a = StatT (WriterT Stat m a)
-    deriving(MonadIO, Functor, MonadFix, MonadTrans, Monad)
+    deriving(Applicative, MonadIO, Functor, MonadFix, MonadTrans, Monad)
 
 runStatT :: Monad m => StatT m a -> m (a,Stat)
 runStatT (StatT m) =  runWriterT m
@@ -133,6 +133,10 @@ instance Monad StatM where
     StatM _ s1 >> StatM y s2 = StatM y (s1 `mappend` s2)
     return x = StatM x mempty
     StatM x s1 >>= y = case y x of StatM z s2 -> StatM z (s1 `mappend` s2)
+
+instance Applicative StatM where
+  pure = return
+  (<*>) = ap
 
 instance Stats.MonadStats StatM where
    mticks' 0 k = StatM () mempty

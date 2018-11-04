@@ -20,7 +20,6 @@ module FrontEnd.KindInfer (
 
 import Control.Monad.Identity
 import Control.Monad.Reader
-import Control.Monad.Writer
 import Data.Binary
 import Data.Generics(Typeable, everything, mkQ)
 import Data.IORef
@@ -95,7 +94,7 @@ data KiEnv  = KiEnv {
     }
 
 newtype Ki a = Ki (ReaderT KiEnv IO a)
-    deriving(Monad,MonadReader KiEnv,MonadIO,Functor,MonadWarn)
+    deriving(Applicative,Monad,MonadReader KiEnv,MonadIO,Functor,MonadWarn)
 
 instance MonadSrcLoc Ki where
     getSrcLoc = asks kiSrcLoc

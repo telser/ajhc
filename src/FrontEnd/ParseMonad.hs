@@ -152,6 +152,13 @@ instance Monad P where
 		    Ok s' a -> runP (k a) i x y l s' mode
 	fail s = P $ \_r _col _line loc _stk _m -> Failed loc s
 
+instance Functor P where
+  fmap f x = pure f <*> x
+
+instance Applicative P where
+  pure = return
+  (<*>) = ap
+
 returnP :: a -> P a
 returnP = return
 thenP :: P a -> (a -> P b) -> P b
@@ -224,6 +231,13 @@ instance Monad (Lex r) where
 	Lex v >>= f = Lex $ \k -> v (\a -> runL (f a) k)
 	Lex v >> Lex w = Lex $ \k -> v (\_ -> w k)
 	fail s = Lex $ \_ -> fail s
+
+instance Applicative (Lex r) where
+  pure = return
+  (<*>) = ap
+
+instance Functor (Lex r) where
+  fmap f x = pure f <*> x
 
 instance MonadWarn (Lex r) where
     addWarning w = Lex $ \k -> addWarning w >> k ()

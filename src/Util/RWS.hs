@@ -47,6 +47,10 @@ instance (Monoid w) => Monad (RWS r w s) where
                     (# b, s'', w' #) -> let !w'' = w `mappend` w'
                         in (# b, s'', w'' #)
 
+instance (Monoid w) => Applicative (RWS r w s) where
+  pure = return
+  (<*>) = ap
+
 --instance (Monoid w) => MonadFix (RWS r w s) where
 --	mfix f = RWS $ \r s -> let (a, s', w) = runRWS (f a) r s in (a, s', w)
 
