@@ -212,12 +212,12 @@ beginInteraction act = do
     go hist act
     where
     go hist act = do
-        let commands' = commands ++ [ (n,h) | InteractCommand { commandName = n, commandHelp = h } <- interactCommands act ]
+        let commands' = commands <> [ (n,h) | InteractCommand { commandName = n, commandHelp = h } <- interactCommands act ]
             args s =  [ bb | bb@(n,_) <- commands', s `isPrefixOf` n ]
-            expand s = snub $ fsts (args s) ++ filter (isPrefixOf s) (interactSettables act ++ interactWords act)
+            expand s = snub $ fsts (args s) <> filter (isPrefixOf s) (interactSettables act <> interactWords act)
         s <- readLine (thePrompt act) (pure . expand)
         case (hist,s) of
-            (Just h,(_:_)) -> do
+            (Just h,(_:_)) ->
                 iocatch (hPutStrLn h s >> hFlush h) (const (pure ()))
             _ -> pure ()
         act' <- runInteraction act s

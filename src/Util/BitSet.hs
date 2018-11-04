@@ -17,7 +17,7 @@ newtype BitSet = BitSet Word
 instance Monoid BitSet where
     mempty = BitSet 0
     mappend (BitSet a) (BitSet b) = BitSet (a .|. b)
-    mconcat ss = foldl' mappend mempty ss
+    mconcat = foldl' mappend mempty
 
 instance Unionize BitSet where
     BitSet a `difference` BitSet b = BitSet (a .&. complement b)
@@ -35,7 +35,7 @@ instance Collection BitSet where
 
 type instance Key BitSet = Elem BitSet
 instance SetLike BitSet where
-    keys bs = toList bs
+    keys = toList
     delete i (BitSet v) = BitSet (clearBit v i)
     member i (BitSet v) = testBit v i
     insert i (BitSet v) = BitSet (v .|. bit i)
@@ -94,8 +94,8 @@ newtype EnumBitSet a = EBS BitSet
 type instance Elem (EnumBitSet a) = a
 instance Enum a => Collection (EnumBitSet a) where
     singleton i = EBS $ singleton (fromEnum i)
-    fromList ts = EBS $ fromList (map fromEnum ts)
-    toList (EBS w) = map toEnum $ toList w
+    fromList ts = EBS $ fromList (fmap fromEnum ts)
+    toList (EBS w) = fmap toEnum $ toList w
 
 type instance  Key (EnumBitSet a) = Elem (EnumBitSet a)
 instance Enum a => SetLike (EnumBitSet a) where
@@ -128,4 +128,4 @@ toWord :: BitSet -> Word
 toWord (BitSet w) = w
 
 fromWord :: Word -> BitSet
-fromWord w = BitSet w
+fromWord = BitSet

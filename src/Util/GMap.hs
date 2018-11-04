@@ -1,4 +1,4 @@
-{-# OPTIONS -XTypeFamilies #-}
+{-# LANGUAGE TypeFamilies #-}
 module Util.GMap where
 
 import Util.HasSize

@@ -1,4 +1,4 @@
-{-# OPTIONS -XDeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Util.Histogram(
     Histogram,
     singleton,
@@ -60,14 +60,14 @@ map f (Histogram m) = Histogram $ Map.fromList [ (f k,i) | (k,i) <- Map.toList m
 
 mapM :: (Monad m, Ord b) => (a -> m b) -> Histogram a -> m (Histogram b)
 mapM f (Histogram m) = do
-        ds <- sequence [ do f k >>= pure . flip (,) i  | (k,i) <- Map.toList m ]
+        ds <- sequence [ f k >>= pure . flip (,) i  | (k,i) <- Map.toList m ]
         pure $ Histogram (Map.fromList ds)
 
 mapM_ :: (Monad m) => (a -> m b) -> Histogram a -> m ()
-mapM_ f (Histogram m) = sequence_ [ do f k >>= pure . flip (,) i  | (k,i) <- Map.toList m ]
+mapM_ f (Histogram m) = sequence_ [ f k >>= pure . flip (,) i  | (k,i) <- Map.toList m ]
 
 fromList :: Ord a => [a] -> Histogram a
-fromList xs = L.foldl' (flip insert) empty xs
+fromList = L.foldl' (flip insert) empty
 
 empty :: Histogram a
 empty = Histogram Map.empty

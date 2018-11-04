@@ -46,15 +46,15 @@ instance Show n => Show (Graph n) where
     showsPrec n g = showsPrec n (Util.Graph.scc g)
 
 fromGraph :: Graph n -> [(n,[n])]
-fromGraph (Graph g lv) = [ (lv!v,map (lv!) vs) | (v,vs) <- assocs g ]
+fromGraph (Graph g lv) = [ (lv!v,fmap (lv!) vs) | (v,vs) <- assocs g ]
 
-newGraph :: Ord k => [n] -> (n -> k) -> (n -> [k]) -> (Graph n)
+newGraph :: Ord k => [n] -> (n -> k) -> (n -> [k]) -> Graph n
 newGraph ns a b = snd $ newGraph' ns a b
 
 newGraphReachable :: Ord k => [n] -> (n -> k) -> (n -> [k]) -> ([k] -> [n],Graph n)
 newGraphReachable ns fn fd = (rable,ng) where
     (vmap,ng) = newGraph' ns fn fd
-    rable ks = Util.Graph.reachable ng [ v | Just v <- map (flip Map.lookup vmap) ks ]
+    rable ks = Util.Graph.reachable ng [ v | Just v <- fmap (flip Map.lookup vmap) ks ]
 
 reachableFrom :: Ord k => (n -> k) -> (n -> [k]) -> [n] -> [k] -> [n]
 reachableFrom fn fd ns  = fst $ newGraphReachable ns fn fd
@@ -85,7 +85,7 @@ findLoopBreakers func ex (Graph g ln) = ans where
     scc = G.scc g
     ans = f g scc [] [] where
         f g (Node v []:sccs) fs lb
-            | v `elem` g ! v = let ng = (fmap (delete v) g) in  f ng (G.scc ng) [] (v:lb)
+            | v `elem` g ! v = let ng = fmap (delete v) g in  f ng (G.scc ng) [] (v:lb)
             | otherwise = f g sccs (v:fs) lb
 
         f g (n:_) fs lb = f ng (G.scc ng) [] (mv:lb) where
@@ -95,18 +95,18 @@ findLoopBreakers func ex (Graph g ln) = ans where
             ns = dec n []
             ng = fmap (delete mv) g
 
-        f _ [] xs lb = (map ((ln!) . head) (group $ sort lb),reverse $ map (ln!) xs)
+        f _ [] xs lb = (fmap ((ln!) . head) (group $ sort lb),reverse $ fmap (ln!) xs)
     dec (Node v ts) vs = v:foldr dec vs ts
 
 
 reachable :: Graph n -> [Vertex] -> [n]
-reachable (Graph g ln) vs = map (ln!) $ snub $  concatMap (G.reachable g) vs
+reachable (Graph g ln) vs = fmap (ln!) . snub $  concatMap (G.reachable g) vs
 
 sccGroups :: Graph n -> [[n]]
-sccGroups g = map fromScc (Util.Graph.scc g)
+sccGroups g = fmap fromScc (Util.Graph.scc g)
 
 scc :: Graph n -> [Either n [n]]
-scc (Graph g ln) = map decode forest where
+scc (Graph g ln) = fmap decode forest where
     forest = G.scc g
     decode (Node v [])
         | v `elem` g ! v = Right [ln!v]
@@ -115,32 +115,32 @@ scc (Graph g ln) = map decode forest where
     dec (Node v ts) vs = ln!v:foldr dec vs ts
 
 sccForest :: Graph n -> Forest n
-sccForest (Graph g ln) = map (fmap (ln!)) forest where
+sccForest (Graph g ln) = fmap (fmap (ln!)) forest where
     forest = G.scc g
 
 dff :: Graph n -> Forest n
-dff (Graph g ln) = map (fmap (ln!)) forest where
+dff (Graph g ln) = fmap (fmap (ln!)) forest where
     forest = G.dff g
 
 components :: Graph n -> [[n]]
-components (Graph g ln) = map decode forest where
+components (Graph g ln) = fmap decode forest where
     forest = G.components g
     decode n = dec n []
     dec (Node v ts) vs = ln!v:foldr dec vs ts
 
 
 topSort :: Graph n -> [n]
-topSort (Graph g ln) = map (ln!) $ G.topSort g
+topSort (Graph g ln) = fmap (ln!) $ G.topSort g
 
 cyclicNodes :: Graph n -> [n]
 cyclicNodes g = concat [ xs | Right xs <- Util.Graph.scc g]
 
 toDag :: Graph n -> Graph [n]
 toDag (Graph g lv) = Graph g' ns' where
-    ns' = listArray (0,max_v) [ map (lv!) ns |  ns <- nss ]
+    ns' = listArray (0,max_v) [ fmap (lv!) ns |  ns <- nss ]
     g' = listArray (0,max_v) [ snub [ v | n <- ns, v <- g!n ] | ns <- nss ]
     max_v = length nss - 1
-    nss = map (flip f []) (G.scc g) where
+    nss = fmap (flip f []) (G.scc g) where
         f (Node v ts) rs = v:foldr f rs ts
 
 type AdjacencyMatrix s  = STArray s (Vertex,Vertex) Bool
@@ -149,7 +149,7 @@ type IAdjacencyMatrix  = Array (Vertex,Vertex) Bool
 transitiveClosureAM :: AdjacencyMatrix s -> ST s ()
 transitiveClosureAM arr = do
     bnds@(_,(max_v,_)) <- getBounds arr
-    forM_ [0 .. max_v] $ \k -> do
+    forM_ [0 .. max_v] $ \k ->
         forM_ (range bnds) $ \ (i,j) -> do
                 dij <- readArray arr (i,j)
                 dik <- readArray arr (i,k)
@@ -163,8 +163,8 @@ transitiveReductionAM arr = do
     bnds@(_,(max_v,_)) <- getBounds arr
     transitiveClosureAM arr
     (farr :: IAdjacencyMatrix) <- freeze arr
-    forM_ [0 .. max_v] $ \k -> do
-        forM_ (range bnds) $ \ (i,j) -> do
+    forM_ [0 .. max_v] $ \k ->
+        forM_ (range bnds) $ \ (i,j) ->
             if farr!(k,i) && farr!(i,j) then
                 writeArray arr (k,j) False
              else pure ()
@@ -184,14 +184,18 @@ fromAdjacencyMatrix arr = do
     pure (listArray (0,max_v) [ [ v | (n',v) <- rs', n == n' ] | n <- [ 0 .. max_v] ])
 
 transitiveClosure :: Graph n -> Graph n
-transitiveClosure (Graph g ns) = let g' = runST (tc g) in (Graph g' ns) where
+transitiveClosure (Graph g ns) = let g' = runST (tc g) in
+  Graph g' ns
+  where
     tc g = do
         a <- toAdjacencyMatrix g
         transitiveClosureAM a
         fromAdjacencyMatrix a
 
 transitiveReduction :: Graph n -> Graph n
-transitiveReduction (Graph g ns) = let g' = runST (tc g) in (Graph g' ns) where
+transitiveReduction (Graph g ns) = let g' = runST (tc g) in
+  Graph g' ns
+  where
     tc g = do
         a <- toAdjacencyMatrix g
         transitiveReductionAM a

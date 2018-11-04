@@ -175,8 +175,8 @@ solve putLog csp = do
             checkRS lvl ne
         doLte lvl xe ~xw@(Ri xml xlb xmu xub) ye ~yw@(Ri yml ylb ymu yub) = do
             let done = UF.putW xe (Ri xml xlb xmu xub) >> UF.putW ye (Ri yml ylb ymu yub)
-            if ye `Set.member` xub then done else do
-            if xe `Set.member` ylb then done else do
+            if ye `Set.member` xub then done else
+              if xe `Set.member` ylb then done else do
             if ye `Set.member` xlb then doEq lvl xe xw ye yw else do
             if xe `Set.member` yub then doEq lvl xe xw ye yw else do
             UF.putW xe (Ri xml xlb xmu (Set.insert ye (xub `Set.union` yub)))

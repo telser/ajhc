@@ -34,12 +34,10 @@ sq s = s
 
 sl :: [(String,String)] -> String
 sl [] = []
-sl a = " [" ++ foldr ($) "]" (intersperse (',':) (map showEq a)) where
+sl a = " [" ++ foldr ($) "]" (intersperse (',':) (fmap showEq a))
 
 showEq :: (String,String) -> String -> String
-showEq (x,y) = ((x ++ " = " ++  (show y)) ++)
-
-
+showEq (x,y) = ((x ++ " = " ++  show y) ++)
 
 graphviz :: Graph g =>    g a b   -- ^ The graph to format
                           -> String  -- ^ The title of the graph
@@ -80,6 +78,3 @@ graphviz g t headers fnode fedge (w, h) p@(pw', ph') o =
                     | otherwise        = '\t':(show n ++ sa ++ "\n")
             where sa = sl (fnode a)
           se (n1, n2, b) = '\t':(show n1 ++ " -> " ++ show n2 ++ sl (fedge b) ++ "\n")
-
-
-

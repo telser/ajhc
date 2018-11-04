@@ -64,7 +64,7 @@ fromNameMT :: NameMT n m a -> StateT (Set.Set n, Set.Set n) m a
 fromNameMT (NameMT x) = x
 
 instance (GenName n,Ord n,Monad m) => NameMonad n (NameMT n m) where
-    addNames ns = NameMT $ do
+    addNames ns = NameMT $
         modify (\ (used,bound) -> (Set.fromList ns `Set.union` used, bound) )
     addBoundNames ns = NameMT $ do
         let nset = Set.fromList ns
