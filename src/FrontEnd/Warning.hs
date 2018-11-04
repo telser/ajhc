@@ -62,14 +62,14 @@ printIOErrors = do
     ws <- readIORef ioWarnings
     b <- processErrors' False ws
     writeIORef ioWarnings []
-    return b
+    pure b
 
 processErrors :: [Warning] -> IO ()
-processErrors ws = processErrors' True ws >> return ()
+processErrors ws = processErrors' True ws >> pure ()
 
 processErrors' :: Bool -> [Warning] -> IO Bool
-processErrors' _ [] = return False
-processErrors' doDie ws = putErrLn "" >> mapM_ s (snub ws) >> when (die && doDie) exitFailure >> return die where
+processErrors' _ [] = pure False
+processErrors' doDie ws = putErrLn "" >> mapM_ s (snub ws) >> when (die && doDie) exitFailure >> pure die where
 --    ws' = filter ((`notElem` ignore) . warnType ) $ snub ws
     s Warning { warnSrcLoc = sl, warnType = t, warnMessage = m }
         | sl == bogusASrcLoc = putErrLn $ msg t m

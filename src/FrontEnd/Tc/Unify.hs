@@ -35,48 +35,48 @@ subsumes s1 s2 = do
     (s1,s2) <- if dump FD.BoxySteps then do
         s1 <- evalFullType s1
         s2 <- evalFullType s2
-        return (s1,s2)
+        pure (s1,s2)
       else do
         s1 <- evalType s1
         s2 <- evalType s2
-        return (s1,s2)
+        pure (s1,s2)
     printRule $ "subsumes: " <> ppretty s1 <+> ppretty s2
     sub s1 s2
    where
     -- SBOXY
     sub tb@(TMetaVar mv) b  = do
         boxyMatch tb b
-        return ctId
+        pure ctId
 
     -- SKOL needs to be after SBOXY
     sub s1 fa@TForAll {} = do
         printRule "SKOL"
         (vs,_,r2) <- skolomize fa
         f <- s1 `subsumes` r2
-        return (composeCoerce (ctAbs vs) f)
-        --return (CoerceTerm (\x -> CoerceLam vs (f x)))
+        pure (composeCoerce (ctAbs vs) f)
+        --pure (CoerceTerm (\x -> CoerceLam vs (f x)))
 
     -- SPEC
     sub s1@(TForAll as (_ :=> _))  r2 | isRho' r2 = do   -- isRho' r2
         printRule "SPEC"
         (ts,r1') <- boxyInstantiate s1
         f <- r1' `subsumes` r2
-        return (f `composeCoerce` (ctAp ts))
-        --return (CoerceTerm (\x -> f (CoerceApp x ts)))
+        pure (f `composeCoerce` (ctAp ts))
+        --pure (CoerceTerm (\x -> f (CoerceApp x ts)))
 
     -- CON
     sub s1 s2 | (_,(_:_)) <- fromTAp s1 = do
         s1 `boxyMatch` s2
-        return ctId
+        pure ctId
 
     -- F1
     sub (TArrow s1 s2) (TArrow s3 s4) = do
         printRule "F1"
         boxyMatch s3 s1
         f2 <- s2 `subsumes` s4
-        return (ctFun f2)
-        --return (CoerceTerm (\g -> CoerceFn f2 g))
-        --return (\g y -> f2 (runCoerce g y))
+        pure (ctFun f2)
+        --pure (CoerceTerm (\g -> CoerceFn f2 g))
+        --pure (\g y -> f2 (runCoerce g y))
 
     -- F2
     sub t@(TArrow s1 s2) (TMetaVar mv) = do
@@ -84,49 +84,49 @@ subsumes s1 s2 = do
         withMetaVars mv [getType s1, getType s2] (\ [a,b] -> TArrow a b) $ \ [a,b] -> do
         subsumes t (a `fn` b)
 
-    sub t1@TArrow {} t2@TAp {} = boxyMatch t1 t2 >> return ctId
+    sub t1@TArrow {} t2@TAp {} = boxyMatch t1 t2 >> pure ctId
 
     -- ASSOC
     sub s1@TAssoc {} s2 = do
         printRule "ASSOC-L"
         s1 `boxyMatch` s2
-        return ctId
+        pure ctId
     -- ASSOC
     sub s1 s2@TAssoc {} = do
         printRule "ASSOC-R"
         s1 `boxyMatch` s2
-        return ctId
+        pure ctId
 
     -- BMONO
-    sub a (TMetaVar mv) | isTau a  = varBind mv a >> return ctId
+    sub a (TMetaVar mv) | isTau a  = varBind mv a >> pure ctId
     -- MONO
-    sub a b | isTau a && isTau b = unify a b >> return ctId
+    sub a b | isTau a && isTau b = unify a b >> pure ctId
 
     sub a b = fail $ "subsumes failure: " <> ppretty a <+> ppretty b
 
--- might as well return flattened type
+-- might as well pure flattened type
 -- we can skip the occurs check for boxy types
 occursCheck u@MetaVar { metaType = Tau } t = do
     tt <- evalFullType t
     when (u `Set.member` freeMetaVars tt) $ unificationError (TMetaVar u) tt -- occurs check
-    return tt
-occursCheck u t = return t
+    pure tt
+occursCheck u t = pure t
 
 printRule :: String -> Tc ()
 printRule s
     | dump FD.BoxySteps = liftIO $ putStrLn s
-    | otherwise = return ()
+    | otherwise = pure ()
 
 boxyMatch :: Sigma' -> Sigma' -> Tc ()
 boxyMatch s1 s2 = do
     (s1,s2) <- if dump FD.BoxySteps then do
         s1 <- evalFullType s1
         s2 <- evalFullType s2
-        return (s1,s2)
+        pure (s1,s2)
       else do
         s1 <- evalType s1
         s2 <- evalType s2
-        return (s1,s2)
+        pure (s1,s2)
     printRule $ "boxyMatch: " <> ppretty s1 <+> ppretty s2
     b <- bm s1 s2
     if b then do
@@ -134,11 +134,11 @@ boxyMatch s1 s2 = do
         printRule $ "boxyMatch: " <> ppretty s2 <+> ppretty s1
         b' <- bm s2 s1
         when b' $  fail $ "boxyMatch failure: " <> ppretty s1 <+> ppretty s2
-     else return ()
+     else pure ()
    where
     bm (TMetaVar v1) (TMetaVar v2) = do
         var_meets_var v1 v2
-        return False
+        pure False
 
     -- AEQ1
     bm a@(TArrow s1 s2) (TMetaVar mv) = do
@@ -146,21 +146,21 @@ boxyMatch s1 s2 = do
         occursCheck mv a
         withMetaVars mv [getType s1, getType s2] (\ [t1,t2] -> TArrow t1 t2) $ \ [t1,t2] ->
             boxyMatch s1 t1 >> boxyMatch s2 t2
-        return False
+        pure False
 
     -- AEQ2
     bm (TArrow s1 s2) (TArrow s3 s4) = do
         printRule "AEQ2"
         boxyMatch s1 s3
         boxyMatch s2 s4
-        return False
+        pure False
 
     bm t@(TArrow s1 s2) (TAp (TAp arr a1) a2) = do
         printRule "AF2-arrow"
         tArrow `boxyMatch` arr
         boxyMatch s1 a1
         boxyMatch s2 a2
-        return False
+        pure False
 
     -- CEQ1
 
@@ -169,7 +169,7 @@ boxyMatch s1 s2 = do
         a <- occursCheck mv a
         withMetaVars mv (map getType as) (\ ts -> foldl tAp (TCon ca) ts) $ \ ts ->
             sequence_ [ boxyMatch a t | t <- ts | a <- as ]
-        return False
+        pure False
 
     bm a (TMetaVar mv) | (x,xs@(_:_)) <- fromTAp a = do
         --printRule $ "CEQ1: " ++ pprint a
@@ -177,7 +177,7 @@ boxyMatch s1 s2 = do
         a <- occursCheck mv a
         withMetaVars mv (map getType xxs) (\ (t:ts) -> foldl tAp t ts) $ \ ts ->
             sequence_ [ boxyMatch a t | t <- ts | a <- xxs ]
-        return False
+        pure False
 
     -- CEQ2
 
@@ -185,7 +185,7 @@ boxyMatch s1 s2 = do
         False -> unificationError a b
         True | length as == length bs -> do
             printRule $ "CEQ2: " ++ pprint ca
-            sequence_ [boxyMatch x y | x <- as | y <- bs] >> return False
+            sequence_ [boxyMatch x y | x <- as | y <- bs] >> pure False
         _ -> unificationError a b
 
     -- SEQ1
@@ -193,7 +193,7 @@ boxyMatch s1 s2 = do
         a <- occursCheck mv a
         withMetaVars mv [getType mv] (\ [t] -> TForAll vs (ps :=> t))  $ \ [t] ->
             boxyMatch tbody t
-        return False
+        pure False
 
     -- SEQ2
 
@@ -203,13 +203,13 @@ boxyMatch s1 s2 = do
         printRule "SEQ2"
         boxyMatch r1 r2
         assertEquivalant ps1 ps2
-        return False
+        pure False
 
     bm (TAp a b) (TAp c d) = do
         printRule "APP"
         a `boxyMatch` c
         b `boxyMatch` d
-        return False
+        pure False
 
     -- Associated type
     bm ta@TAssoc {} (TMetaVar mv) = do
@@ -220,7 +220,7 @@ boxyMatch s1 s2 = do
          else do
             printRule "ASSOC-BIND"
             varBind mv ta'
-        return False
+        pure False
 
     bm ta@TAssoc {} tb@TAssoc {} = do
         ta' <- evalFullType ta
@@ -228,19 +228,19 @@ boxyMatch s1 s2 = do
         when (ta' /= tb') $ do
             printRule "ASSOC-EQ"
             addPreds [IsEq ta' tb']
-        return False
+        pure False
 
     bm ta@TAssoc {} t = do
         printRule "ASSOC-EQ"
         -- are associated types tau?
         addPreds [IsEq ta t]
-        return False
+        pure False
 
     -- MEQ1 MEQ2  SYM
     bm a b
-        | isTau a, TMetaVar mv <- b = printRule "MEQ1" >> varBind mv a >> return False
-        | isTau a && isTau b = printRule "MEQ2" >> unify a b >> return False
-    bm _ _ = return True
+        | isTau a, TMetaVar mv <- b = printRule "MEQ1" >> varBind mv a >> pure False
+        | isTau a && isTau b = printRule "MEQ2" >> unify a b >> pure False
+    bm _ _ = pure True
 
 solveConstraints :: [Constraint] -> Tc ()
 solveConstraints cs = mapM_ f cs where
@@ -251,7 +251,7 @@ listenSolvePreds tc = do
     (x,(ps,cs)) <- listenCPreds tc
     ((),(ps',cs')) <- listenCPreds (solveConstraints cs)
     ch <- getClassHierarchy
-    return (x,simplify ch (ps ++ ps') ++ [ IsEq a b | Equality _ a b <- cs' ])
+    pure (x,simplify ch (ps ++ ps') ++ [ IsEq a b | Equality _ a b <- cs' ])
 
 var_meets_var :: MetaVar -> MetaVar -> Tc ()
 var_meets_var tv1 tv2 = do
@@ -259,7 +259,7 @@ var_meets_var tv1 tv2 = do
     k <- kindCombine (getType tv1) (getType tv2)
     f k tv1 tv2
     where
-    f k tv1 tv2 | tv1 == tv2 = zonkKind k tv1 >> return ()
+    f k tv1 tv2 | tv1 == tv2 = zonkKind k tv1 >> pure ()
     f k tv1 tv2 | isBoxyMetaVar tv1 && isBoxyMetaVar tv2 = do
             printRule "BBEQ"
             tt <- newMetaVar Tau k
@@ -269,17 +269,17 @@ var_meets_var tv1 tv2 = do
             printRule "BBEQ-L"
             varBind tv1 (TMetaVar tv2)
             zonkKind k tv2
-            return ()
+            pure ()
     f k tv1 tv2 | isBoxyMetaVar tv2  = do
             printRule "BBEQ-R"
             varBind tv2 (TMetaVar tv1)
             zonkKind k tv1
-            return ()
+            pure ()
     f k tv1 tv2  = do
             printRule "BBEQ-Tau"
             varBind tv2 (TMetaVar tv1)
             zonkKind k tv1
-            return ()
+            pure ()
 
 unify      :: Tau -> Tau -> Tc ()
 unify t1 t2 = do
@@ -291,16 +291,16 @@ unify t1 t2 = do
 mgu (TAp l r) (TAp l' r')
    = do s1 <- unify l l'
         s2 <- unify r r'
-        return ()
+        pure ()
 mgu (TArrow l r) (TArrow l' r')
    = do s1 <- unify l l'
         s2 <- unify r r'
-        return ()
+        pure ()
 mgu (TMetaVar u) t | not $ isBoxyMetaVar u = varBind u t
 mgu t (TMetaVar u) | not $ isBoxyMetaVar u = varBind u t
-mgu (TVar a) (TVar b) | a == b = return ()
+mgu (TVar a) (TVar b) | a == b = pure ()
 mgu c1@(TCon tc1) c2@(TCon tc2)
-           | tc1==tc2 = return ()
+           | tc1==tc2 = pure ()
            ---- | otherwise = fail $ "mgu: Constructors don't match:" ++ show (c1,c2)
            | otherwise = unificationError c1 c2
 mgu TForAll {} _ = error "attempt to unify TForall"

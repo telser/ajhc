@@ -130,7 +130,7 @@ newtype Tc a = Tc (ReaderT TcEnv (WriterT Output IO) a)
 getDeName :: DeNameable n => Tc (n -> n)
 getDeName = do
     mn <- asks (tcInfoModName . tcInfo)
-    return (\n -> deName mn n)
+    pure (\n -> deName mn n)
 
 -- | run a computation with a local environment
 localEnv :: TypeEnv -> Tc a -> Tc a
@@ -161,14 +161,14 @@ getCollectedEnv = do
     v <- asks tcCollectedEnv
     r <- liftIO $ readIORef v
     r <- T.mapM flattenType r
-    return r
+    pure r
 
 getCollectedCoerce :: Tc (Map.Map Name CoerceTerm)
 getCollectedCoerce = do
     v <- asks tcCollectedCoerce
     r <- liftIO $ readIORef v
     r <- T.mapM flattenType r
-    return r
+    pure r
 
 runTc :: (MonadIO m,OptionMonad m) => TcInfo -> Tc a -> m a
 runTc tcInfo  (Tc tim) = do
@@ -192,7 +192,7 @@ runTc tcInfo  (Tc tim) = do
         tcOptions         = opt
         }
     liftIO $ processErrors (T.toList $ tcWarnings out)
-    return a
+    pure a
 
 instance OptionMonad Tc where
     getOptions = asks tcOptions
@@ -223,19 +223,19 @@ getSigEnv = asks (tcInfoSigEnv . tcInfo)
 askCurrentEnv = do
     env1 <- asks tcConcreteEnv
     env2 <- asks tcMutableEnv
-    return (env2 `Map.union` env1)
+    pure (env2 `Map.union` env1)
 
 {-
 dConScheme :: Name -> Tc Sigma
 dConScheme conName = do
     env <- askCurrentEnv
     case Map.lookup conName env of
-        Just s -> return s
+        Just s -> pure s
         Nothing -> error $ "dConScheme: constructor not found: " ++ show conName ++
                               "\nin this environment:\n" ++ show env
 -}
 
--- | returns a new box and a function to read said box.
+-- | pures a new box and a function to read said box.
 
 newBox :: Kind -> Tc Type
 newBox k = newMetaVar Sigma k
@@ -256,11 +256,11 @@ lookupName n = do
     case Map.lookup n env of
         Just x -> freshSigma x
         Nothing | Just 0 <- fromUnboxedNameTuple n  -> do
-            return (tTTuple' [])
+            pure (tTTuple' [])
         Nothing | Just num <- fromUnboxedNameTuple n -> do
             nvs <- mapM newVar  (replicate num kindArg)
             let nvs' = map TVar nvs
-            return (TForAll nvs $ [] :=> foldr TArrow  (tTTuple' nvs') nvs')
+            pure (TForAll nvs $ [] :=> foldr TArrow  (tTTuple' nvs') nvs')
         Nothing -> fail $ "Could not find var in tcEnv:" ++ show (nameType n,n)
 
 newMetaVar :: MetaVarType -> Kind -> Tc Type
@@ -268,7 +268,7 @@ newMetaVar t k = do
     te <- ask
     n <- newUniq
     r <- liftIO $ newIORef Nothing
-    return $ TMetaVar MetaVar { metaUniq = n, metaKind = k, metaRef = r, metaType = t }
+    pure $ TMetaVar MetaVar { metaUniq = n, metaKind = k, metaRef = r, metaType = t }
 
 class Instantiate a where
     inst:: Map.Map Int Type -> Map.Map Name Type -> a -> a
@@ -301,8 +301,8 @@ freshInstance typ (TForAll as qt) = do
     ts <- mapM (newMetaVar typ) (map tyvarKind as)
     let (ps :=> t) = (applyTyvarMapQT (zip as ts) qt)
     addPreds ps
-    return (ts,t)
-freshInstance _ x = return ([],x)
+    pure (ts,t)
+freshInstance _ x = pure ([],x)
 
 addPreds :: Preds -> Tc ()
 addPreds ps = do
@@ -325,7 +325,7 @@ listenCPreds action = censor (\x -> x { constraints = mempty, collectedPreds = m
 listenCheckedRules :: Tc a -> Tc (a,[Rule])
 listenCheckedRules action = do
     (a,r) <- censor (\x -> x { checkedRules = mempty }) $ listens checkedRules action
-    return (a,T.toList r)
+    pure (a,T.toList r)
 
 newVar :: Kind -> Tc Tyvar
 newVar k = do
@@ -333,15 +333,15 @@ newVar k = do
     n <- newUniq
     let ident = toName TypeVal (tcInfoModName $ tcInfo te,'v':show n)
         v = tyvar ident k
-    return v
+    pure v
 
 -- rename the bound variables of a sigma, just in case.
 freshSigma :: Sigma -> Tc Sigma
-freshSigma (TForAll [] ([] :=> t)) = return t
+freshSigma (TForAll [] ([] :=> t)) = pure t
 freshSigma (TForAll vs qt) = do
     nvs <- mapM (newVar . tyvarKind) vs
-    return (TForAll nvs $ applyTyvarMapQT (zip vs (map TVar nvs)) qt)
-freshSigma x = return x
+    pure (TForAll nvs $ applyTyvarMapQT (zip vs (map TVar nvs)) qt)
+freshSigma x = pure x
 
 toSigma :: Sigma -> Sigma
 toSigma t@TForAll {} = t
@@ -351,7 +351,7 @@ toSigma t = TForAll [] ([] :=> t)
 -- TODO predicates?
 
 skolomize :: Sigma -> Tc ([Tyvar],[Pred],Type)
-skolomize s = freshSigma s >>= return . fromType
+skolomize s = freshSigma s >>= pure . fromType
 
 boxyInstantiate :: Sigma -> Tc ([Type],Rho')
 boxyInstantiate = freshInstance Sigma
@@ -364,26 +364,26 @@ deconstructorInstantiate tfa@TForAll {} = do
         eqvs = vs Data.List.\\ freeVars (f t)
     tell mempty { existentialVars = eqvs }
     (_,t) <- freshInstance Sigma (TForAll (vs Data.List.\\ eqvs) qt)
-    return t
-deconstructorInstantiate x = return x
+    pure t
+deconstructorInstantiate x = pure x
 
 boxySpec :: Sigma -> Tc ([(BoundTV,[Sigma'])],Rho')
 boxySpec (TForAll as qt@(ps :=> t)) = do
     let f (TVar t) vs | t `elem` vs = do
             b <- lift (newBox $ tyvarKind t)
             tell [(t,b)]
-            return b
-        f e@TCon {} _ = return e
+            pure b
+        f e@TCon {} _ = pure e
         f (TAp a b) vs = liftM2 tAp (f a vs) (f b vs)
         f (TArrow a b) vs = liftM2 TArrow (f a vs) (f b vs)
         f (TForAll as (ps :=> t)) vs = do
             t' <- f t (vs Data.List.\\ as)
-            return (TForAll as (ps :=> t'))
-        f t _ = return t
+            pure (TForAll as (ps :=> t'))
+        f t _ = pure t
         -- f t _ = error $ "boxySpec: " ++ show t
     (t',vs) <- runWriterT (f t as)
     addPreds $ inst mempty (Map.fromList [ (tyvarName bt,s) | (bt,s) <- vs ]) ps
-    return (sortGroupUnderFG fst snd vs,t')
+    pure (sortGroupUnderFG fst snd vs,t')
 boxySpec _ = error "boxySpec: bad."
 
 freeMetaVarsEnv :: Tc (Set.Set MetaVar)
@@ -391,8 +391,8 @@ freeMetaVarsEnv = do
     env <- asks tcMutableEnv
     xs <- flip mapM (Map.elems env)  $ \ x -> do
         x <- flattenType x
-        return $ freeMetaVars x
-    return (Set.unions xs)
+        pure $ freeMetaVars x
+    pure (Set.unions xs)
 
 quantify_n :: [MetaVar] -> [Pred] -> [Rho] -> Tc [Sigma]
 quantify_n vs ps rs | not $ any isBoxyMetaVar vs = do
@@ -405,11 +405,11 @@ quantify_n vs ps rs | not $ any isBoxyMetaVar vs = do
     rs <- flattenType rs
 
     ch <- getClassHierarchy
-    return $ [TForAll nvs (FrontEnd.Tc.Class.simplify ch ps :=> r) | r <- rs ]
+    pure $ [TForAll nvs (FrontEnd.Tc.Class.simplify ch ps :=> r) | r <- rs ]
                     | otherwise = error "quantify_n: bad."
 
 quantify :: [MetaVar] -> [Pred] -> Rho -> Tc Sigma
-quantify vs ps r = do [s] <- quantify_n vs ps [r]; return s
+quantify vs ps r = do [s] <- quantify_n vs ps [r]; pure s
 
 -- turn all ?? into * types, as we can't abstract over unboxed types
 fixKind :: Kind -> Kind
@@ -427,8 +427,8 @@ unBox tv = ft' tv where
         | isBoxyMetaVar mv = do
             tmv <- newMetaVar Tau (getType mv)
             varBind mv tmv
-            return tmv
-        | otherwise =  return t
+            pure tmv
+        | otherwise =  pure t
     ft t = tickleM ft' t
     ft' t = evalType t >>= ft
 
@@ -445,13 +445,13 @@ evalTAssoc ta@TAssoc { typeCon = Tycon { tyconName = n1 }, typeClassArgs = ~[car
             case Map.lookup (n1,n2) ie of
                 Just (aa,bb,tt) -> evalType (applyTyvarMap (zip aa as ++ zip bb eas) tt)
                 _ -> fail "no instance for associated type"
-        _ -> return ta { typeClassArgs = [carg'] }
-evalTAssoc t = return t
+        _ -> pure ta { typeClassArgs = [carg'] }
+evalTAssoc t = pure t
 
 evalArrowApp (TAp (TAp (TCon tcon) ta) tb)
-    | tyconName tcon == tc_Arrow = return (TArrow ta tb)
+    | tyconName tcon == tc_Arrow = pure (TArrow ta tb)
 
-evalArrowApp t = return t
+evalArrowApp t = pure t
 
 -- Bind mv to type, first filling in any boxes in type with tau vars
 varBind :: MetaVar -> Type -> Tc ()
@@ -479,11 +479,11 @@ varBind u t
 zonkKind :: Kind -> MetaVar -> Tc MetaVar
 zonkKind nk mv = do
     fk <- kindCombine nk (metaKind mv)
-    if fk == metaKind mv then return mv else do
+    if fk == metaKind mv then pure mv else do
         nref <- liftIO $ newIORef Nothing
         let nmv = mv { metaKind = fk, metaRef = nref }
         liftIO $ modifyIORef (metaRef mv) (\Nothing -> Just $ TMetaVar nmv)
-        return nmv
+        pure nmv
 
 zonkBox :: MetaVar -> Tc Type
 zonkBox mv | isBoxyMetaVar mv = findType (TMetaVar mv)
@@ -492,7 +492,7 @@ zonkBox mv = fail $ "zonkBox: nonboxy" ++ show mv
 readFilledBox :: MetaVar -> Tc Type
 readFilledBox mv | isBoxyMetaVar mv = zonkBox mv >>= \v -> case v of
     TMetaVar mv' | mv == mv' -> fail $ "readFilledBox: " ++ show mv
-    t -> return t
+    t -> pure t
 readFilledBox mv = error $ "readFilledBox: nonboxy" ++ show mv
 
 {-
@@ -500,7 +500,7 @@ elimBox :: MetaVar -> Tc Type
 elimBox mv | isBoxyMetaVar mv = do
     t <- readMetaVar mv
     case t of
-        Just t -> return t
+        Just t -> pure t
         Nothing -> newMetaVar Tau (getType mv)
 
 elimBox mv = error $ "elimBox: nonboxy" ++ show mv
@@ -514,7 +514,7 @@ elimBox mv = error $ "elimBox: nonboxy" ++ show mv
 --pretty x = show (pprint x :: Doc)
 
 instance Monad Tc where
-    return a = Tc $ return a
+    return a = Tc $ pure a
     Tc comp >>= fun = Tc $ do x <- comp; case fun x of Tc m -> m
     Tc a >> Tc b = Tc $ a >> b
     fail s = Tc $ do
@@ -534,8 +534,8 @@ instance MonadSrcLoc Tc where
     getSrcLoc = do
         xs <- asks tcDiagnostics
         case xs of
-            (Msg (Just sl) _:_) -> return sl
-            _ -> return bogusASrcLoc
+            (Msg (Just sl) _:_) -> pure sl
+            _ -> pure bogusASrcLoc
 
 instance UniqueProducer Tc where
     newUniq = do
@@ -543,8 +543,8 @@ instance UniqueProducer Tc where
         n <- liftIO $ do
             n <- readIORef v
             writeIORef v $! n + 1
-            return n
-        return n
+            pure n
+        pure n
 
 tcInfoEmpty = TcInfo {
     tcInfoEnv            = mempty,
@@ -560,7 +560,7 @@ withMetaVars mv ks sfunc bsfunc | isBoxyMetaVar mv = do
     res <- bsfunc boxes
     tys <- mapM readFilledBox [ mv | ~(TMetaVar mv) <- boxes]
     varBind mv (sfunc tys)
-    return res
+    pure res
 withMetaVars mv ks sfunc bsfunc  = do
     taus <- mapM (newMetaVar Tau) ks
     varBind mv (sfunc taus)

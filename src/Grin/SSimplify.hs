@@ -72,13 +72,13 @@ simplify :: Grin -> IO Grin
 simplify grin = do
     let (fs,_,SCol { colStats = stats}) = runRWS fun mempty SState { usedVars = mempty }
         S fun = simpFuncs (grinFunctions grin)
-    return grin { grinFunctions = fs, grinStats = grinStats grin `mappend` stats }
+    pure grin { grinFunctions = fs, grinStats = grinStats grin `mappend` stats }
 
 simpFuncs :: [FuncDef] -> S [FuncDef]
 simpFuncs fd = do
     let f fd@FuncDef { funcDefBody = body } = do
             body' <- simpLam body
-            return $ updateFuncDefProps fd { funcDefBody = body' }
+            pure $ updateFuncDefProps fd { funcDefBody = body' }
     mapM f fd
 
 simpLam :: Lam -> S Lam
@@ -87,7 +87,7 @@ simpLam (ps :-> e) = do
     let f col = col { colFreeVars = colFreeVars col \\ freeVars ps }
     (e,col) <- censor f $ listen $ local (env' `mappend`) $ simpExp e
     ps <- mapM (zeroVars (`member` colFreeVars col)) ps
-    return (ps :-> e)
+    pure (ps :-> e)
 
 dstore x = BaseOp (StoreNode True) [x]
 
@@ -98,7 +98,7 @@ simpDone e = do
         (BaseOp (Apply ty) (Var (V vn) _:fs)) | Just (tl,gs) <- IM.lookup vn pmap -> do
             (cl,fn) <- tagUnfunction tl
             mtick $ if cl == 1 then "Simplify.Apply.Papp.{" ++ show tl  else ("Simplify.Apply.App.{" ++ show fn)
-            return $ if cl == 1
+            pure $ if cl == 1
                 then App fn (gs ++ fs) ty
                 else dstore (NodeC (partialTag fn (cl - 1)) (gs ++ fs))
         (Case v ls) | isJust utypes -> ans where
@@ -107,19 +107,19 @@ simpDone e = do
             ans = do
                 mtick "Grin.Simplify.Unbox.case-return"
                 let vs = zipWith Var [v1 ..] ts
-                return (unboxModify ur (Case v ls) :>>= vs :->  (unboxRet ur vs))
+                pure (unboxModify ur (Case v ls) :>>= vs :->  (unboxRet ur vs))
         (Case v1 ls) | [v1'] :-> Case v2 ls' <- last ls, v1' == v2 || v1 == v2 -> do
             let f (p :-> e) = p :-> Return [v1] :>>= [v1'] :-> e
             mtick "Grin.Simplify.case-merge"
-            return $ Case v1 (init ls ++ map f ls')
+            pure $ Case v1 (init ls ++ map f ls')
         --(e :>>= p :-> Return p') | p == p' -> do
         --    mtick "Grin.Simplify.tail-return-omit"
-        --    return e
+        --    pure e
         _ -> do
             cmap <- asks envCSE
             case Map.lookup e cmap of
-                Just (n,e') -> do mtick n; tellFV e'; return e'
-                Nothing -> return e
+                Just (n,e') -> do mtick n; tellFV e'; pure e'
+                Nothing -> pure e
 
 simpBind :: [Val] -> Exp -> S Exp -> S Exp
 simpBind p e cont = f p e where
@@ -128,8 +128,8 @@ simpBind p e cont = f p e where
         e <- simpDone e
         if isOmittable e && isEmpty (freeVars p `intersection` colFreeVars col) then do
             mtick "Simplify.Omit.Bind"
-            return z
-         else return $ e :>>= (p :-> z)
+            pure z
+         else pure $ e :>>= (p :-> z)
     cse' name xs = cse name ((e,Return p):xs)
     f p app@(BaseOp Eval [v]) =  cse' "Simplify.CSE.eval" [(BaseOp Promote [v],Return p)]
     f p (BaseOp Promote [v@Var {}]) =  cse' "Simplify.CSE.promote" [(gEval v,Return p)]
@@ -218,15 +218,15 @@ simpExp e = f e [] where
         (ys,env') <- renamePattern ys
         let env'' = env' `mappend` senv
         z <- local (const env'') $ f b rs
-        ts <- mapM (return . Just) [([y],Return [x]) | x <- xs | y <- ys ]
+        ts <- mapM (pure . Just) [([y],Return [x]) | x <- xs | y <- ys ]
         let h [] = z
             h ((p,v):rs) = v :>>= p :-> h rs
-        return $ h [ (p,v) |  Just (p,v) <- ts]
+        pure $ h [ (p,v) |  Just (p,v) <- ts]
     dtup _ _ _ _ _ = error "dtup: attempt to bind unequal lists"
     g (Case v as) = do
         v <- applySubst v
         as <- mapM simpLam as
-        return $ Case v as
+        pure $ Case v as
     g  lt@Let { expDefs = defs, expBody = body } = do
         body <- f body []
         defs <- simpFuncs defs
@@ -235,15 +235,15 @@ simpExp e = f e [] where
         case body of
             e :>>= l :-> r | isInvalid e -> do
                 mtick "Simplify.simplify.let-shrink-head"
-                return $ e :>>= l :-> updateLetProps lt { expBody = r, expDefs = defs }
+                pure $ e :>>= l :-> updateLetProps lt { expBody = r, expDefs = defs }
             e :>>= l :-> r | isInvalid r -> do
                 mtick "Simplify.simplify.let-shrink-tail"
-                return (updateLetProps lt { expBody = e, expDefs = defs } :>>= l :-> r)
+                pure (updateLetProps lt { expBody = e, expDefs = defs } :>>= l :-> r)
             App f as ts | f `elem` map funcDefName defs, f `Set.notMember` freeVars (map funcDefBody defs) -> do
                 mtick "Simplify.simplify.let-inline-body"
                 let [fbody] = [ funcDefBody fd | fd <- defs, funcDefName fd == f]
-                return $ updateLetProps lt { expDefs = defs, expBody = Return as :>>= fbody }
-            _ -> return $ updateLetProps lt { expBody = body, expDefs = defs }
+                pure $ updateLetProps lt { expDefs = defs, expBody = Return as :>>= fbody }
+            _ -> pure $ updateLetProps lt { expBody = body, expDefs = defs }
     g x = applySubstE x
 
 applySubstE :: Exp -> S Exp
@@ -253,13 +253,13 @@ applySubst x = f x where
     f var@(Var (V v) _) = do
         env <- asks envSubst
         case IM.lookup v env of
-            Just n -> tellFV n >> return n
-            Nothing -> tellFV var >> return var
+            Just n -> tellFV n >> pure n
+            Nothing -> tellFV var >> pure var
     f x = mapValVal f x
 
 zeroVars fn x = f x where
-    f (Var v ty) | fn v || v == v0 = return (Var v ty)
-                 | otherwise = do mtick $ "Simplify.ZeroVar.{" ++ show (Var v ty); return (Var v0 ty)
+    f (Var v ty) | fn v || v == v0 = pure (Var v ty)
+                 | otherwise = do mtick $ "Simplify.ZeroVar.{" ++ show (Var v ty); pure (Var v0 ty)
     f x = mapValVal f x
 
 renamePattern :: [Val] ->  S ([Val],SEnv)
@@ -269,18 +269,18 @@ renamePattern x = runWriterT (mapM f x) where
         v' <- lift $ newVarName v
         let nv = Var v' t
         tell (mempty { envSubst = IM.singleton vn nv })
-        return nv
+        pure nv
     f x = mapValVal f x
 
 newVarName :: Var -> S Var
-newVarName (V 0) = return (V 0)
+newVarName (V 0) = pure (V 0)
 newVarName (V sv) = do
     s <- gets usedVars
     let nv = v sv
         v n | n `IS.member` s = v (1 + n + IS.size s)
             | otherwise = n
     modify (\e -> e { usedVars = IS.insert nv s })
-    return (V nv)
+    pure (V nv)
 
 isHoly (NodeC _ as) | any isValUnknown as = True
 isHoly n = False
@@ -349,17 +349,17 @@ unboxModify ur = f ur where
     f (UnStore _ _ us) =runIdentity . editTail nty (z us)
     f (UnDemote _) =runIdentity . editTail nty y
     f _ = error "SSimplify.unboxModify: bad1."
-    g xs (Return ys) = return $ Return (concat $ zipWith h xs ys)
+    g xs (Return ys) = pure $ Return (concat $ zipWith h xs ys)
     g _ _ = error "SSimplify.unboxModify: bad2."
     h (UnUnknown _) y = [y]
     h (UnConst {}) _ = []
     h _ _ = error "SSimplify.unboxModify: bad3."
-    z xs (BaseOp (StoreNode _) [NodeC _ ts]) = return . Return . concat $ zipWith h xs ts
+    z xs (BaseOp (StoreNode _) [NodeC _ ts]) = pure . Return . concat $ zipWith h xs ts
     z _ _ = error "SSimplify.unboxModify: bad4."
-    y (BaseOp Demote [x]) = return $ Return [x]
-    y (Return [Const v]) = return $ Return [v]
+    y (BaseOp Demote [x]) = pure $ Return [x]
+    y (Return [Const v]) = pure $ Return [v]
     y _ = error "SSimplify.unboxModify: bad5."
-    mApp f (App f' as tys) | f == f' = return $ Return as
+    mApp f (App f' as tys) | f == f' = pure $ Return as
     mApp f e  = error $ "mApp: " ++ show (f,e)
 
 combineUnboxing :: UnboxingResult -> UnboxingResult -> UnboxingResult
@@ -396,24 +396,24 @@ getUnboxing e = f e where
 
 editTail :: Monad m => [Ty] -> (Exp -> m Exp) -> Exp -> m Exp
 editTail nty mt te = f (sempty :: GSet Atom) te where
-    f _ (Error s ty) = return $ Error s nty
-    f lf (Case x ls) = return (Case x) `ap` mapM (g lf) ls
+    f _ (Error s ty) = pure $ Error s nty
+    f lf (Case x ls) = pure (Case x) `ap` mapM (g lf) ls
     f lf lt@Let {expIsNormal = False, expBody = body } = do
         body <- f lf body
-        return $ updateLetProps lt { expBody = body }
+        pure $ updateLetProps lt { expBody = body }
     f lf lt@Let {expDefs = defs, expIsNormal = True } = do
         let nlf = lf `union` fromList (map funcDefName defs)
         mapExpExp (f nlf) lt
     f lf lt@MkCont {expLam = lam, expCont = cont } = do
         a <- g lf lam
         b <- g lf cont
-        return $ lt { expLam = a, expCont = b }
+        pure $ lt { expLam = a, expCont = b }
     f lf (e1 :>>= p :-> e2) = do
         e2 <- f lf e2
-        return $ e1 :>>= p :-> e2
-    f lf e@(App a as t) | a `member` lf = return $ App a as nty
+        pure $ e1 :>>= p :-> e2
+    f lf e@(App a as t) | a `member` lf = pure $ App a as nty
     f lf e = mt e
-    g lf (p :-> e) = do e <- f lf e; return $ p :-> e
+    g lf (p :-> e) = do e <- f lf e; pure $ p :-> e
 
 bool b x y = if b then x else y
 
@@ -424,9 +424,9 @@ explicitRecurse
     :: Grin
     -> IO Grin
 explicitRecurse grin =  mapGrinFuncsM f grin where
-    f name lam | name `notMember` (freeVars lam :: GSet Atom) = return lam
+    f name lam | name `notMember` (freeVars lam :: GSet Atom) = pure lam
     f name (as :-> e) = do
         let nname = toAtom $ "bR" ++ fromAtom name
             g (App n rs t) | n == name = App nname rs t
             g e = tickle g e
-        return $ as :-> grinLet [createFuncDef True nname (as :-> g e) ] (App nname as (getType e))
+        pure $ as :-> grinLet [createFuncDef True nname (as :-> g e) ] (App nname as (getType e))

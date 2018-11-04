@@ -36,19 +36,19 @@ dropSpace = do
     case x of
         ';':_ -> pdropWhile ('\n' /=) >> dropSpace
         c:_ | isSpace c -> pdropWhile isSpace >> dropSpace
-        _ -> return ()
+        _ -> pure ()
 
 pdropWhile f  = do
     x <- look
     case x of
         c:_ | f c -> discard 1 >> pdropWhile f
-        _ -> return ()
+        _ -> pure ()
 
 ptakeWhile f  = do
     x <- look
     let ts = takeWhile f x
     discard (length ts)
-    return ts
+    pure ts
 
 pThings ch rs zs  = ans where
     ans = look >>= \x -> case x of
@@ -60,7 +60,7 @@ pThings ch rs zs  = ans where
             v <- pValue
             dropSpace
             pThings ch (rs Seq.|> v) zs
-        [] -> return (zs Seq.|> (ch,rs))
+        [] -> pure (zs Seq.|> (ch,rs))
 
 trim = rbdropWhile isSpace
 
@@ -72,13 +72,13 @@ pValue = do
     n <- ptakeWhile (`notElem` ['\n','='])
     expect "="
     rs <- ptakeWhile (/= '\n')
-    return (trim n, trim rs)
+    pure (trim n, trim rs)
 
 pHeader = do
     expect "["
     n <- ptakeWhile (`notElem` "]\n")
     expect "]"
-    return (trim n)
+    pure (trim n)
 
 -- We use laziness cleverly to avoid repeating work
 processIni :: Seq.Seq (String,Seq.Seq (String,String)) -> Map.Map String (Seq.Seq (String,String))
@@ -101,7 +101,7 @@ parseIniFile fp = readFile fp >>= parseIniRaw fp
 parseIniRaw :: String -> String -> IO (Seq.Seq (String,Seq.Seq (String,String)))
 parseIniRaw fp c = do
     let P act = dropSpace >> pThings "default" Seq.empty Seq.empty
-    return $ evalState act (0,fp,c)
+    pure $ evalState act (0,fp,c)
 
 parseIniFiles
     :: Bool          -- ^ whether verbose is enabled
@@ -110,8 +110,8 @@ parseIniFiles
     -> [String]      -- ^ the m-flags
     -> IO (Map.Map String String)
 parseIniFiles verbose raw fs ss = do
-    let rf fn = iocatch (do c <- parseIniFile fn; pverb ("reading " ++ fn); return c) (\_ -> return Seq.empty)
-        pverb s = if verbose then putErrLn s else return ()
+    let rf fn = iocatch (do c <- parseIniFile fn; pverb ("reading " ++ fn); pure c) (\_ -> pure Seq.empty)
+        pverb s = if verbose then putErrLn s else pure ()
     rawp <- parseIniRaw "(builtin targets.ini)" raw
     fsc <- mapM rf fs
     let pini = processIni (foldr (Seq.><) Seq.empty (rawp:fsc))
@@ -123,7 +123,7 @@ parseIniFiles verbose raw fs ss = do
         res mp (k,v) | Just r <- getPrefix "+" (reverse k) = Map.insertWith f (reverse $ dropWhile isSpace r) v mp where
             f y x = x ++ " " ++ y
         res mp (k,v) = Map.insert k v mp
-    return (f ss Map.empty)
+    pure (f ss Map.empty)
 
 --main = do
 --    as <- getArgs

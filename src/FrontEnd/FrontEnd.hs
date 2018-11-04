@@ -28,7 +28,7 @@ doModules htc ms  = do
 
 modInfo m = do
     let (xs,ys) = collectDefsHsModule m
-    return ModInfo {
+    pure ModInfo {
         modInfoName = hsModuleName m,
         modInfoDefs = xs,
         modInfoHsModule = m,

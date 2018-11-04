@@ -20,7 +20,7 @@ hsType :: (MonadSrcLoc m, MonadWarn m) => HsType -> m ()
 --hsType x@HsTyExists {} = do
 --    addWarn "h98-forall" "Explicit quantification is a non-haskell98 feature"
 --    hsQualType (hsTypeType x)
-hsType x = traverseHsType (\x -> hsType x >> return x) x >> return ()
+hsType x = traverseHsType (\x -> hsType x >> pure x) x >> pure ()
 
 --hsQualType x  = hsType (hsQualTypeType x)
 
@@ -50,11 +50,11 @@ hsDecl cntx decl = f cntx decl where
 --        let isEnum = all (\x ->  null (hsConDeclArgs x)) cs
 --        when (not isEnum && class_Enum `elem` ds) $ warn sl "derive-enum" "Cannot derive enum from non enumeration type"
 --        when (not isEnum && length cs /= 1 && class_Bounded `elem` ds) $ warn sl "derive-bounded" "Cannot derive bounded from non enumeration or unary type"
-        return ()
+        pure ()
 --    f TopLevel HsNewTypeDecl { hsDeclSrcLoc = sl, hsDeclDerives = ds' } = do
 --        let ds = map (toName ClassName) ds'
 --        checkDeriving sl True ds
---        return ()
+--        pure ()
     f context@TopLevel decl@HsTypeDecl { hsDeclTArgs = as } | any (not . isHsTyVar) as = warn (srcLoc decl) InvalidDecl $ "complex type arguments not allowed " ++ show context
 --    f context@(InClass ts) decl@HsTypeDecl { hsDeclTArgs = as }
 --        | any (not . isHsTyVar) as = warn (srcLoc decl) InvalidDecl $ "complex type arguments not allowed " ++ show context
@@ -71,12 +71,12 @@ hsDecl cntx decl = f cntx decl where
     f context decl@HsClassDecl {} = warn (srcLoc decl) InvalidDecl $ "class declaration not allowed " ++ show context
     f context decl@HsInstDecl {} = warn (srcLoc decl) InvalidDecl $ "instance declaration not allowed " ++ show context
 
-    f _ _ = return ()
+    f _ _ = pure ()
 
---fetchQtArgs sl HsQualType { hsQualTypeType = t } | (HsTyCon {},args@(_:_)) <- fromHsTypeApp t = return args
---fetchQtArgs sl _ = warn sl InvalidDecl "invalid head in class or instance decl" >> return []
+--fetchQtArgs sl HsQualType { hsQualTypeType = t } | (HsTyCon {},args@(_:_)) <- fromHsTypeApp t = pure args
+--fetchQtArgs sl _ = warn sl InvalidDecl "invalid head in class or instance decl" >> pure []
 
-checkDeriving _ _ xs | all (`elem` derivableClasses) xs = return ()
+checkDeriving _ _ xs | all (`elem` derivableClasses) xs = pure ()
 --checkDeriving sl True _ = warn sl "h98-newtypederiv" "arbitrary newtype derivations are a non-haskell98 feature"
 checkDeriving sl False xs
   = let nonDerivable = filter (`notElem` derivableClasses) xs

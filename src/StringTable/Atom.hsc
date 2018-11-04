@@ -42,14 +42,14 @@ class FromAtom a where
     fromAtom :: Atom -> a
     fromAtomIO :: Atom -> IO a
 
-    fromAtomIO a = return (fromAtom a)
+    fromAtomIO a = pure (fromAtom a)
     fromAtom a = unsafePerformIO (fromAtomIO a)
 
 class ToAtom a where
     toAtom :: a -> Atom
     toAtomIO :: a -> IO Atom
 
-    toAtomIO a = return (toAtom a)
+    toAtomIO a = pure (toAtom a)
     toAtom a = unsafePerformIO (toAtomIO a)
 
 class HasHash a where
@@ -129,7 +129,7 @@ instance Read Atom where
     readsPrec _ s = [ (toAtom s,"") ]
 
 intToAtom :: Monad m => Int -> m Atom
-intToAtom i = if isValidAtom i then return (Atom $ fromIntegral i) else
+intToAtom i = if isValidAtom i then pure (Atom $ fromIntegral i) else
     fail $ "intToAtom: " ++ show i
 
 isValidAtom :: Int -> Bool
@@ -172,7 +172,7 @@ instance Binary Atom where
     get = do
         x <- getWord8
         bs <- getBytes (fromIntegral x)
-        return $ toAtom bs
+        pure $ toAtom bs
     put a = do
         let bs = fromAtom a
         putWord8 $ fromIntegral $ BS.length bs

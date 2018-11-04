@@ -82,7 +82,7 @@ lookupTyp a = f where
     g (_:xs) = g xs
 
 lookup :: forall a m . (Monad m,Typeable a) => Info -> m a
-lookup = maybe (fail $ "Info: could not find: " ++ show typ) return . f where
+lookup = maybe (fail $ "Info: could not find: " ++ show typ) pure . f where
     typ = typeOf (undefined :: a)
     f = lookupTyp (undefined :: a)
 
@@ -114,8 +114,8 @@ infoMapM :: (Typeable a, Typeable b, Show b, Monad m) => (a -> m b) -> Info -> m
 infoMapM f i = case Info.Info.lookup i of
     Just x -> do
         n <- f x
-        return (insert n (delete x i))
-    Nothing -> return i
+        pure (insert n (delete x i))
+    Nothing -> pure i
 
 infoMap :: (Typeable a, Typeable b, Show b) => (a -> b) -> Info ->  Info
 infoMap f i = case Info.Info.lookup i of

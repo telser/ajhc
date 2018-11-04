@@ -22,12 +22,12 @@ grinRaiseArity grin = do
     rv <- supplyReadValues argSupply
     printTable "Grin.Arity: arguments" rv
 
-    return grin
+    pure grin
 
 go argSupply (fn,~(Tup as) :-> e) = do
     vs <- mapM (\ (Var v _,i) -> supplyValue argSupply (fn,i)) (zip as naturals)
     let env = Map.fromList (zip [ v | ~(Var v _) <- as ] vs)
-        f Fetch {} = return ()
+        f Fetch {} = pure ()
         f (App n as _) = mapM_ (g n) (zip as naturals)
         f (Store (NodeC nn as)) | Just (_,n) <- tagUnfunction nn = mapM_ (g n) (zip as naturals)
         f (e1 :>>= p :-> e2) = f e1 >> f e2
@@ -36,9 +36,9 @@ go argSupply (fn,~(Tup as) :-> e) = do
         g fn (Var v _,i) | Just value <- Map.lookup v env = do
             vv <- supplyValue argSupply (fn,i)
             addRule $ vv `implies` value
-        g _ _ = return ()
+        g _ _ = pure ()
         bf v | Just val <- Map.lookup v env = addRule $ value True `implies` val
-        bf _ = return ()
+        bf _ = pure ()
     f e
 
 implies :: Value Bool -> Value Bool -> Rule

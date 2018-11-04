@@ -68,7 +68,7 @@ vmapDropArgs vm = vm { vmapArgs = mempty }
 
 vmapHeads :: Monad m => VMap p n -> m [n]
 vmapHeads VMap { vmapNodes = Left _ } = fail "vmapHeads: VMap is unknown"
-vmapHeads VMap { vmapNodes = Right set } = return $ Set.toList set
+vmapHeads VMap { vmapNodes = Right set } = pure $ Set.toList set
 
 vmapMember :: Ord n => n -> VMap p n -> Bool
 vmapMember n VMap { vmapNodes = Left _ } = True

@@ -45,80 +45,80 @@ instance Tickleable Val Val where
     tickleM = mapValVal
     tickleM_ = mapValVal_
 instance Tickleable Lam Grin where
-    tickleM f grin = liftM (`setGrinFunctions` grin) $ mapM  (\x -> do nb <- f (funcDefBody x); return (funcDefName x, nb)) (grinFunctions grin)
+    tickleM f grin = liftM (`setGrinFunctions` grin) $ mapM  (\x -> do nb <- f (funcDefBody x); pure (funcDefName x, nb)) (grinFunctions grin)
 instance Tickleable Lam FuncDef where
     tickleM f fd = funcDefBody_uM f fd
 instance Tickleable (Atom,Lam) FuncDef where
     tickleM f fd@FuncDef { funcDefName = n, funcDefBody = b } = do
     (n',b') <- f (n,b)
-    return $  updateFuncDefProps fd { funcDefBody = b', funcDefName = n' }
+    pure $  updateFuncDefProps fd { funcDefBody = b', funcDefName = n' }
 
 mapBodyM :: Monad m => (Exp -> m Exp) -> Lam -> m Lam
-mapBodyM f (x :-> y) = f y >>= return . (x :->)
+mapBodyM f (x :-> y) = f y >>= pure . (x :->)
 
 mapExpVal :: Monad m => (Val -> m Val) -> Exp -> m Exp
 mapExpVal g x = f x where
-    f (App a vs t) = return (App a) `ap` mapM g vs `ap` return t
-    f (BaseOp a vs) = return (BaseOp a) `ap` mapM g vs
-    f (Return vs) = return Return `ap` mapM g vs
-    f (Prim x vs t) = return (Prim x) `ap` mapM g vs `ap` return t
+    f (App a vs t) = pure (App a) `ap` mapM g vs `ap` pure t
+    f (BaseOp a vs) = pure (BaseOp a) `ap` mapM g vs
+    f (Return vs) = pure Return `ap` mapM g vs
+    f (Prim x vs t) = pure (Prim x) `ap` mapM g vs `ap` pure t
     f e@Alloc { expValue = v, expCount = c } = do
         v <- g v
         c <- g c
-        return e { expValue = v, expCount = c }
+        pure e { expValue = v, expCount = c }
     f (Case v as) = do
         v <- g v
-        return (Case v as)
-    f e = return e
+        pure (Case v as)
+    f e = pure e
 
 mapValVal fn x = f x where
-    f (NodeC t vs) = return (NodeC t) `ap` mapM fn vs
-    f (Index a b) = return Index `ap` fn a `ap` fn b
-    f (Const v) = return Const `ap` fn v
-    f (ValPrim p vs ty) = return (ValPrim p) `ap` mapM fn vs `ap` return ty
-    f x = return x
+    f (NodeC t vs) = pure (NodeC t) `ap` mapM fn vs
+    f (Index a b) = pure Index `ap` fn a `ap` fn b
+    f (Const v) = pure Const `ap` fn v
+    f (ValPrim p vs ty) = pure (ValPrim p) `ap` mapM fn vs `ap` pure ty
+    f x = pure x
 
 mapValVal_ fn x = f x where
     f (NodeC t vs) = mapM_ fn vs
-    f (Index a b) = fn a >> fn b >> return ()
-    f (Const v) = fn v >> return ()
-    f (ValPrim p vs ty) =  mapM_ fn vs >> return ()
-    f _ = return ()
+    f (Index a b) = fn a >> fn b >> pure ()
+    f (Const v) = fn v >> pure ()
+    f (ValPrim p vs ty) =  mapM_ fn vs >> pure ()
+    f _ = pure ()
 
 mapExpLam fn e = f e where
-    f (a :>>= b) = return (a :>>=) `ap` fn b
-    f (Case e as) = return (Case e) `ap` mapM fn as
+    f (a :>>= b) = pure (a :>>=) `ap` fn b
+    f (Case e as) = pure (Case e) `ap` mapM fn as
     f lt@Let { expDefs = defs } = do
         defs' <- forM defs $ \d -> do
             b <- fn $ funcDefBody d
-            return $ updateFuncDefProps d { funcDefBody = b }
-        return $ updateLetProps lt { expDefs = defs' }
+            pure $ updateFuncDefProps d { funcDefBody = b }
+        pure $ updateLetProps lt { expDefs = defs' }
     f nr@NewRegion { expLam = lam } = do
         lam <- fn lam
-        return $ nr { expLam = lam }
+        pure $ nr { expLam = lam }
     f e@MkCont { expCont = c, expLam = l } = do
         c <- fn c
         l <- fn l
-        return $ e { expCont = c, expLam = l }
-    f e = return e
+        pure $ e { expCont = c, expLam = l }
+    f e = pure e
 
 mapExpExp fn e = f e where
-    f (a :>>= b) = return (:>>=) `ap` fn a `ap` g b
+    f (a :>>= b) = pure (:>>=) `ap` fn a `ap` g b
     f l@Let { expBody = b, expDefs = defs } = do
         b <- fn b
-        return updateLetProps `ap` (mapExpLam g l { expBody = b })
-    f (GcRoots vs e) = return (GcRoots vs) `ap` fn e
+        pure updateLetProps `ap` (mapExpLam g l { expBody = b })
+    f (GcRoots vs e) = pure (GcRoots vs) `ap` fn e
     f e = mapExpLam g e
-    g (l :-> e) = return (l :->) `ap` fn e
+    g (l :-> e) = pure (l :->) `ap` fn e
 
 mapFBodies f xs = mapM f' xs where
     f' fd@FuncDef { funcDefBody = l :-> r } = do
         r' <- f r
-        return $  updateFuncDefProps fd { funcDefBody = l :-> r' }
+        pure $  updateFuncDefProps fd { funcDefBody = l :-> r' }
 
 funcDefBody_uM f fd@FuncDef { funcDefBody = b } = do
     b' <- f b
-    return $  updateFuncDefProps fd { funcDefBody = b' }
+    pure $  updateFuncDefProps fd { funcDefBody = b' }
 
 grinFunctions_s nf grin = grin { grinFunctions = nf }
 
@@ -129,19 +129,19 @@ grinFunctions_s nf grin = grin { grinFunctions = nf }
 isManifestNode :: Monad m => Exp -> m [Atom]
 isManifestNode e = f (sempty :: GSet Atom) e where
     f lf _ | False && trace ("isManifestNode: " ++ show lf) False = undefined
-    f lf (Return [(NodeC t _)]) = return [t]
-    f lf Error {} = return []
-    f lf (App a _ _) | a `member` lf = return []
+    f lf (Return [(NodeC t _)]) = pure [t]
+    f lf Error {} = pure []
+    f lf (App a _ _) | a `member` lf = pure []
     f lf Let { expBody = body, expIsNormal = False } = f lf body
     f lf Let { expBody = body, expDefs = defs, expIsNormal = True } = ans where
         nlf = lf `union` fromList (map funcDefName defs)
         ans = do
             xs <- mapM (f nlf . lamExp . funcDefBody) defs
             b <- f nlf body
-            return (concat (b:xs))
+            pure (concat (b:xs))
     f lf (Case _ ls) = do
         cs <- Prelude.mapM (f lf) [ e | _ :-> e <- ls ]
-        return $ concat cs
+        pure $ concat cs
     f lf (_ :>>= _ :-> e) = isManifestNode e
     f lf _ = fail "not manifest node"
 
@@ -193,24 +193,24 @@ collectFuncs exp = runWriter (cfunc exp) where
             xs <- cfunc e
             tell xs
             clfunc y
-        cfunc (App a _ _) = return (singleton a)
+        cfunc (App a _ _) = pure (singleton a)
         cfunc (Case _ as) = do
             rs <- mapM clfunc as
-            return (mconcat rs)
+            pure (mconcat rs)
         cfunc Let { expFuncCalls = (tail,nonTail) } = do
             tell nonTail
-            return tail
-        cfunc Error {} = return mempty
-        cfunc Prim {} = return mempty
-        cfunc Return {} = return mempty
-        cfunc BaseOp {} = return mempty
-        cfunc Alloc {} = return mempty
+            pure tail
+        cfunc Error {} = pure mempty
+        cfunc Prim {} = pure mempty
+        cfunc Return {} = pure mempty
+        cfunc BaseOp {} = pure mempty
+        cfunc Alloc {} = pure mempty
         cfunc GcRoots { expBody = b} = cfunc b
         cfunc NewRegion { expLam = l } = clfunc l
         cfunc MkCont { expCont = l1, expLam = l2 } = do
             a <- clfunc l1
             b <- clfunc l2
-            return (a `mappend` b)
+            pure (a `mappend` b)
         cfunc x = error "Grin.Noodle.collectFuncs: unknown"
 
 grinLet defs body = updateLetProps Let {
@@ -246,7 +246,7 @@ getReturnInfo  e = ans where
     f lf (Case _ ls) = do Prelude.mapM_ (f lf) [ e | _ :-> e <- ls ]
     f lf (_ :>>= _ :-> e) = f lf e
     f lf Let { expBody = body, expIsNormal = False } = f lf body
-    f lf (App a _ _) | a `member` lf = return ()
+    f lf (App a _ _) | a `member` lf = pure ()
     f lf Let { expBody = body, expDefs = defs, expIsNormal = True } = ans where
         nlf = lf `union` fromList (map funcDefName defs)
         ans = do
@@ -256,4 +256,4 @@ getReturnInfo  e = ans where
     f _ e = tells ReturnOther
 
 mapGrinFuncsM :: Monad m => (Atom -> Lam -> m Lam) -> Grin -> m Grin
-mapGrinFuncsM f grin = liftM (`setGrinFunctions` grin) $ mapM  (\x -> do nb <- f (funcDefName x) (funcDefBody x); return (funcDefName x, nb)) (grinFunctions grin)
+mapGrinFuncsM f grin = liftM (`setGrinFunctions` grin) $ mapM  (\x -> do nb <- f (funcDefName x) (funcDefBody x); pure (funcDefName x, nb)) (grinFunctions grin)

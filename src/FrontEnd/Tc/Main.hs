@@ -52,19 +52,19 @@ tcKnownApp e coerce vname as typ = do
     -- fall through if the type isn't arrowy enough (will produce type error)
     if (length . fst $ fromTArrow rt) < length as then tcApps' e as typ else do
     (ts,rt) <- freshInstance Sigma sc
-    e' <- if coerce then doCoerce (ctAp ts) e else return e
+    e' <- if coerce then doCoerce (ctAp ts) e else pure e
     --addCoerce nname (ctAp ts)
     let f (TArrow x y) (a:as) = do
             a <- tcExprPoly a x
             y <- evalType y
             (as,fc) <- f y as
-            return (a:as,fc)
+            pure (a:as,fc)
         f lt [] = do
             fc <- lt `subsumes` typ
-            return ([],fc)
+            pure ([],fc)
         f _ _ = error "Main.tcKnownApp: bad."
     (nas,CTId) <- f rt as
-    return (e',nas)
+    pure (e',nas)
 
 tcApps e@(HsVar v) as typ = do
     let vname = toName Val v
@@ -90,11 +90,11 @@ tcApps' e as typ = do
     bs <- sequence [ newBox kindArg | _ <- as ]
     e' <- tcExpr e (foldr fn typ bs)
     as' <- sequence [ tcExprPoly a r | r <- bs | a <- as ]
-    return (e',as')
+    pure (e',as')
 
 tcApp e1 e2 typ = do
     (e1,[e2]) <- tcApps e1 [e2] typ
-    return (e1,e2)
+    pure (e1,e2)
 
 tiExprPoly,tcExprPoly ::  HsExp -> Type ->  Tc HsExp
 
@@ -110,26 +110,26 @@ tiExprPoly e t = do                   -- GEN1
     doCoerce (ctAbs ts) e
 
 doCoerce :: CoerceTerm -> HsExp -> Tc HsExp
-doCoerce CTId e = return e
+doCoerce CTId e = pure e
 doCoerce ct e = do
     (e',n) <- wrapInAsPat e
     addCoerce n ct
-    return e'
+    pure e'
 
 wrapInAsPat :: HsExp -> Tc (HsExp,Name)
 wrapInAsPat e = do
     n <- newHsVar "As"
-    return (HsAsPat (nameName n) e, n)
+    pure (HsAsPat (nameName n) e, n)
 
 wrapInAsPatEnv :: HsExp -> Type -> Tc HsExp
 wrapInAsPatEnv e typ = do
     (ne,ap) <- wrapInAsPat e
     addToCollectedEnv (Map.singleton ap typ)
-    return ne
+    pure ne
 
 newHsVar ns = do
     nn <- newUniq
-    return $ toName Val (ns ++ "@",show nn)
+    pure $ toName Val (ns ++ "@",show nn)
 
 isTypePlaceholder :: HsName -> Bool
 isTypePlaceholder (getModule -> Just m) = m `elem` [toModule "Wild@",toModule "As@"]
@@ -141,7 +141,7 @@ tcExpr e t = do
     t <- evalType t
     e <- tiExpr e t
     --(_,False,_) <- unbox t
-    return e
+    pure e
 
 tiExpr (HsVar v) typ = do
     sc <- lookupName (toName Val v)
@@ -150,7 +150,7 @@ tiExpr (HsVar v) typ = do
     if (toName Val v `Set.member` rc) then do
         (e',n) <- wrapInAsPat (HsVar v)
         tell mempty { outKnots = [(n,toName Val v)] }
-        return e'
+        pure e'
       else do
         doCoerce f (HsVar v)
 
@@ -171,7 +171,7 @@ tiExpr (HsLit l@(HsIntPrim _)) typ = do
     unBox typ
     ty <- evalType typ
     case ty of
-        TCon (Tycon n kh) | kh == kindHash -> return ()
+        TCon (Tycon n kh) | kh == kindHash -> pure ()
         _ -> ty `boxyMatch` (TCon (Tycon tc_Bits32 kindHash))
     wrapInAsPatEnv (HsLit l) ty
 
@@ -187,13 +187,13 @@ tiExpr err@HsError {} typ = do
 tiExpr (HsLit l) typ = do
     t <- tiLit l
     t `subsumes` typ
-    return (HsLit l)
+    pure (HsLit l)
 
 tiExpr (HsAsPat n e) typ = do
     e <- tcExpr e typ
     --typ <- flattenType typ
     addToCollectedEnv (Map.singleton (toName Val n) typ)
-    return (HsAsPat n e)
+    pure (HsAsPat n e)
 
 -- comb LET-S and VAR
 tiExpr expr@(HsExpTypeSig sloc e qt) typ =
@@ -202,11 +202,11 @@ tiExpr expr@(HsExpTypeSig sloc e qt) typ =
     s <- hsQualTypeToSigma kt qt
     s `subsumes` typ
     e' <- tcExpr e typ
-    return (HsExpTypeSig sloc e' qt)
+    pure (HsExpTypeSig sloc e' qt)
 
 tiExpr (HsLeftSection e1 e2) typ = do
     (e1,e2) <- tcApp e1 e2 typ
-    return (HsLeftSection e1 e2)
+    pure (HsLeftSection e1 e2)
 
 -- I know this looks weird but it appears to be correct
 -- e1 :: b
@@ -222,11 +222,11 @@ tiExpr (HsRightSection e1 e2) typ = do
     e1 <- tcExpr e1 arg2
     e2 <- tcExpr e2 (arg `fn` (arg2 `fn` ret))
     (arg `fn` ret) `subsumes` typ
-    return (HsRightSection e1 e2)
+    pure (HsRightSection e1 e2)
 
 tiExpr expr@HsApp {} typ = deNameContext Nothing "in the application" (backToApp h as) $ do
     (h,as) <- tcApps h as typ
-    return $ backToApp h as
+    pure $ backToApp h as
     where
     backToApp h as = foldl HsApp h as
     (h,as) = fromHsApp expr
@@ -236,7 +236,7 @@ tiExpr expr@HsApp {} typ = deNameContext Nothing "in the application" (backToApp
 
 tiExpr expr@(HsInfixApp e1 e2 e3) typ = deNameContext Nothing "in the infix application" expr $ do
     (e2',[e1',e3']) <- tcApps e2 [e1,e3] typ
-    return (HsInfixApp e1' e2' e3')
+    pure (HsInfixApp e1' e2' e3')
 
 -- we need to fix the type to to be in the class
 -- cNum, just for cases such as:
@@ -245,7 +245,7 @@ tiExpr expr@(HsInfixApp e1 e2 e3) typ = deNameContext Nothing "in the infix appl
 tiExpr expr@(HsNegApp e) typ = deNameContext Nothing "in the negative expression" expr $ do
         e <- tcExpr e typ
         addPreds [IsIn class_Num typ]
-        return (HsNegApp e)
+        pure (HsNegApp e)
 
 -- ABS1
 tiExpr expr@(HsLambda sloc ps e) typ = do
@@ -268,7 +268,7 @@ tiExpr expr@(HsLambda sloc ps e) typ = do
                 lamPoly ps e s2' (p':rs)  -- TODO poly
         lam [] e typ rs = do
             e' <- tcExpr e typ
-            return (HsLambda sloc (reverse rs) e')
+            pure (HsLambda sloc (reverse rs) e')
         lam _ _ t _ = do
             t <- flattenType t
             fail $ "expected a -> b, found: " ++ prettyPrintType t
@@ -284,16 +284,16 @@ tiExpr (HsIf e e1 e2) typ = do
     e <- tcExpr e tBool
     e1 <- tcExpr e1 typ
     e2 <- tcExpr e2 typ
-    return (HsIf e e1 e2)
+    pure (HsIf e e1 e2)
 
 tiExpr tuple@(HsTuple exps@(_:_)) typ = deNameContext Nothing "in the tuple" tuple $ do
     --(_,exps') <- tcApps (HsCon (toTuple (length exps))) exps typ
     (_,exps') <- tcApps (HsCon (nameTuple TypeConstructor (length exps))) exps typ
-    return (HsTuple exps')
+    pure (HsTuple exps')
 
 tiExpr tuple@(HsUnboxedTuple exps) typ = deNameContext Nothing "in the unboxed tuple" tuple $ do
     (_,exps') <- tcApps (HsCon (nameName $ unboxedNameTuple DataConstructor (length exps))) exps typ
-    return (HsUnboxedTuple exps')
+    pure (HsUnboxedTuple exps')
 
 -- special case for the empty list
 tiExpr (HsList []) (TAp c v) | c == tList = do
@@ -333,7 +333,7 @@ tiExpr expr@(HsLet decls e) typ = deNameContext Nothing "in the let binding" exp
             localEnv env $ f bgs (ds ++ rs)
         f [] rs = do
             e' <- tcExpr e typ
-            return (HsLet rs e')
+            pure (HsLet rs e')
     f bgs []
 
 tiExpr e typ = fail $ "tiExpr: not implemented for: " ++ show (e,typ)
@@ -345,7 +345,7 @@ tcWheres decls = do
         f (bg:bgs) rs cenv  = do
             (ds,env) <- tcBindGroup bg
             localEnv env $ f bgs (ds ++ rs) (env `mappend` cenv)
-        f [] rs cenv = return (rs,cenv)
+        f [] rs cenv = pure (rs,cenv)
     f bgs [] mempty
 
 deNameContext :: Maybe SrcLoc -> String -> HsExp -> Tc a -> Tc a
@@ -368,22 +368,22 @@ tcAlt scrutinee typ alt@(HsAlt sloc pat gAlts wheres)  = withContext (locMsg slo
     localEnv env $ case gAlts of
         HsUnGuardedRhs e -> do
             e' <- tcExpr e typ
-            return (HsAlt sloc pat' (HsUnGuardedRhs e') wheres')
+            pure (HsAlt sloc pat' (HsUnGuardedRhs e') wheres')
         HsGuardedRhss as -> do
             gas <- mapM (tcGuardedAlt typ) as
-            return (HsAlt sloc pat' (HsGuardedRhss gas) wheres')
+            pure (HsAlt sloc pat' (HsGuardedRhss gas) wheres')
 
 tcGuardedAlt typ gAlt@(HsGuardedRhs sloc eGuard e) = withContext (locMsg sloc "in the guarded alternative" $ render $ ppGAlt gAlt) $ do
     typ <- evalType typ
     g' <- tcExpr eGuard tBool
     e' <- tcExpr e typ
-    return  (HsGuardedRhs sloc g' e')
+    pure  (HsGuardedRhs sloc g' e')
 
 tcGuardedRhs typ gAlt@(HsGuardedRhs sloc eGuard e) = withContext (locMsg sloc "in the guarded alternative" $ render $ ppHsGuardedRhs gAlt) $ do
     typ <- evalType typ
     g' <- tcExpr eGuard tBool
     e' <- tcExpr e typ
-    return  (HsGuardedRhs sloc g' e')
+    pure  (HsGuardedRhs sloc g' e')
 
 -- Typing Patterns
 
@@ -399,32 +399,32 @@ tiPat (HsPVar i) typ = do
         --typ `subsumes` v
         typ' <- unBox typ
         addToCollectedEnv (Map.singleton (toName Val i) typ')
-        return (HsPVar i, Map.singleton (toName Val i) typ')
+        pure (HsPVar i, Map.singleton (toName Val i) typ')
 
-tiPat pl@(HsPLit HsChar {}) typ = boxyMatch tChar typ >> return (pl,mempty)
-tiPat pl@(HsPLit HsCharPrim {}) typ = boxyMatch tCharzh typ >> return (pl,mempty)
-tiPat pl@(HsPLit HsString {}) typ = boxyMatch tString typ >> return (pl,mempty)
+tiPat pl@(HsPLit HsChar {}) typ = boxyMatch tChar typ >> pure (pl,mempty)
+tiPat pl@(HsPLit HsCharPrim {}) typ = boxyMatch tCharzh typ >> pure (pl,mempty)
+tiPat pl@(HsPLit HsString {}) typ = boxyMatch tString typ >> pure (pl,mempty)
 tiPat pl@(HsPLit HsInt {}) typ = do
     unBox typ
     addPreds [IsIn class_Num typ]
-    return (pl,mempty)
+    pure (pl,mempty)
 tiPat pl@(HsPLit HsIntPrim {}) typ = do
     unBox typ
     ty <- evalType typ
     case ty of
-        TCon (Tycon n kh) | kh == kindHash -> return ()
+        TCon (Tycon n kh) | kh == kindHash -> pure ()
         _ -> ty `boxyMatch` (TCon (Tycon tc_Bits32 kindHash))
-    return (pl,mempty)
+    pure (pl,mempty)
 tiPat pl@(HsPLit HsFrac {}) typ = do
     unBox typ
     addPreds [IsIn class_Fractional typ]
-    return (pl,mempty)
+    pure (pl,mempty)
 
 {-
 tiPat (HsPLit l) typ = do
     t <- tiLit l
     typ `subsumes` t -- `boxyMatch` typ
-    return (HsPLit l,Map.empty)
+    pure (HsPLit l,Map.empty)
 -}
 -- this is for negative literals only
 -- so the pat must be a literal
@@ -441,10 +441,10 @@ tiPat (HsPNeg pat) typ = fail $ "non-literal negative patterns are not allowed"
 
 tiPat (HsPIrrPat (Located l p)) typ = do
     (p,ns) <- tiPat p typ
-    return (HsPIrrPat (Located l p),ns)
+    pure (HsPIrrPat (Located l p),ns)
 tiPat (HsPBangPat (Located l p@HsPAsPat {})) typ = do
     (p,ns) <- tiPat p typ
-    return (HsPBangPat (Located l p),ns)
+    pure (HsPBangPat (Located l p),ns)
 tiPat (HsPBangPat (Located l p)) typ = do
     v <- newHsVar "Bang"
     tiPat (HsPBangPat (Located l (HsPAsPat (nameName v) p))) typ
@@ -464,47 +464,47 @@ tiPat (HsPApp conName pats) typ = do
         f [] rs (ps,env) = do
             rs `subsumes` typ
             unBox typ
-            return (HsPApp conName (reverse ps), env)
+            pure (HsPApp conName (reverse ps), env)
     f pats nn mempty
     --bs <- sequence [ newBox Star | _ <- pats ]
     --s `subsumes` (foldr fn typ bs)
     --pats' <- sequence [ tcPat a r | r <- bs | a <- pats ]
-    --return (HsPApp conName (fsts pats'), mconcat (snds pats'))
+    --pure (HsPApp conName (fsts pats'), mconcat (snds pats'))
 
 tiPat pl@(HsPList []) (TAp t v) | t == tList = do
     unBox v
-    return (delistPats [],mempty)
+    pure (delistPats [],mempty)
 
 tiPat pl@(HsPList []) typ = do
     v <- newBox kindStar
     --typ `subsumes` TAp tList v
     typ `boxyMatch` TAp tList v
-    return (delistPats [],mempty)
+    pure (delistPats [],mempty)
 
 tiPat (HsPList pats@(_:_)) (TAp t v) | t == tList = do
     --v <- newBox kindStar
     --TAp tList v `boxyMatch` typ
     --typ `subsumes` TAp tList v
     ps <- mapM (`tcPat` v) pats
-    return (delistPats (fsts ps), mconcat (snds ps))
+    pure (delistPats (fsts ps), mconcat (snds ps))
 
 tiPat (HsPList pats@(_:_)) typ = do
     v <- newBox kindStar
     --TAp tList v `boxyMatch` typ
     ps <- mapM (`tcPat` v) pats
     typ `boxyMatch` TAp tList v
-    return (delistPats (fsts ps), mconcat (snds ps))
+    pure (delistPats (fsts ps), mconcat (snds ps))
 
 tiPat HsPWildCard typ = do
     n <- newHsVar "Wild"
     typ' <- unBox typ
     addToCollectedEnv (Map.singleton n typ')
-    return (HsPVar (nameName n), Map.singleton n typ')
+    pure (HsPVar (nameName n), Map.singleton n typ')
 
 tiPat (HsPAsPat i pat) typ = do
     (pat',env) <- tcPat pat typ
     addToCollectedEnv (Map.singleton (toName Val i) typ)
-    return (HsPAsPat i pat', Map.insert (toName Val i) typ env)
+    pure (HsPAsPat i pat', Map.insert (toName Val i) typ env)
 
 tiPat (HsPInfixApp pLeft conName pRight) typ =  tiPat (HsPApp conName [pLeft,pRight]) typ
 
@@ -515,7 +515,7 @@ tiPat (HsPTypeSig _ pat qt)  typ = do
     s <- hsQualTypeToSigma kt qt
     s `boxyMatch` typ
     p <- tcPat pat typ
-    return p
+    pure p
 
 tiPat p _ = error $ "tiPat: " ++ show p
 
@@ -530,18 +530,18 @@ tcBindGroup (es, is) = do
          (impls, implEnv) <- tiImplGroups is
          localEnv implEnv $ do
              expls   <- mapM tiExpl es
-             return (impls ++ fsts expls, mconcat (implEnv:env1:snds expls))
+             pure (impls ++ fsts expls, mconcat (implEnv:env1:snds expls))
 
 tiImplGroups :: [Either HsDecl [HsDecl]] -> Tc ([HsDecl], TypeEnv)
-tiImplGroups [] = return ([],mempty)
+tiImplGroups [] = pure ([],mempty)
 tiImplGroups (Left x:xs) = do
     (d,te) <- tiNonRecImpl x
     (ds',te') <- localEnv te $ tiImplGroups xs
-    return (d:ds', te `mappend` te')
+    pure (d:ds', te `mappend` te')
 tiImplGroups (Right x:xs) = do
     (ds,te) <- tiImpls x
     (ds',te') <- localEnv te $ tiImplGroups xs
-    return (ds ++ ds', te `mappend` te')
+    pure (ds ++ ds', te `mappend` te')
 
 tiNonRecImpl :: HsDecl -> Tc (HsDecl, TypeEnv)
 tiNonRecImpl decl = withContext (locSimple (srcLoc decl) ("in the implicitly typed: " ++ show (getDeclName decl))) $ do
@@ -565,14 +565,14 @@ tiNonRecImpl decl = withContext (locSimple (srcLoc decl) ("in the implicitly typ
         let (TForAll vs _) = toSigma s
         addCoerce n (ctAbs vs)
         when (dump FD.BoxySteps) $ liftIO $ putStrLn $ "*** " ++ show n ++ " :: " ++ prettyPrintType s
-        return (n,s)
+        pure (n,s)
     (n,s) <- f (getDeclName decl) sc'
     let nenv = (Map.singleton n s)
     addToCollectedEnv nenv
-    return (fst res, nenv)
+    pure (fst res, nenv)
 
 tiImpls ::  [HsDecl] -> Tc ([HsDecl], TypeEnv)
-tiImpls [] = return ([],Map.empty)
+tiImpls [] = pure ([],Map.empty)
 tiImpls bs = withContext (locSimple (srcLoc bs) ("in the recursive implicitly typed: " ++ (show (map getDeclName bs)))) $ do
     let names = map getDeclName bs
     when (dump FD.BoxySteps) $ liftIO $ putStrLn $ "*** tiimpls " ++ show names
@@ -600,19 +600,19 @@ tiImpls bs = withContext (locSimple (srcLoc bs) ("in the recursive implicitly ty
         let (TForAll vs _) = toSigma s
         addCoerce n (ctAbs vs)
         when (dump FD.BoxySteps) $ liftIO $ putStrLn $ "*** " ++ show n ++ " :: " ++ prettyPrintType s
-        return (n,s)
+        pure (n,s)
     nenv <- sequence [ f (getDeclName d) t  | (d,_) <- res | t <- scs' ]
     addToCollectedEnv (Map.fromList nenv)
-    return (fsts res, Map.fromList nenv)
+    pure (fsts res, Map.fromList nenv)
 
 tcRhs :: HsRhs -> Sigma -> Tc HsRhs
 tcRhs rhs typ = case rhs of
     HsUnGuardedRhs e -> do
         e' <- tcExpr e typ
-        return (HsUnGuardedRhs e')
+        pure (HsUnGuardedRhs e')
     HsGuardedRhss as -> do
         gas <- mapM (tcGuardedRhs typ) as
-        return (HsGuardedRhss gas)
+        pure (HsGuardedRhss gas)
 
 tcMiscDecl d = withContext (locMsg (srcLoc d) "in the declaration" "") $ f d where
     f spec@HsPragmaSpecialize { hsDeclSrcLoc = sloc, hsDeclName = n, hsDeclType = t } = do
@@ -624,7 +624,7 @@ tcMiscDecl d = withContext (locMsg (srcLoc d) "in the declaration" "") $ f d whe
             sc <- lookupName nn
             listenPreds $ sc `subsumes` t
             addRule RuleSpec { ruleUniq = hsDeclUniq spec, ruleName = nn, ruleType = t, ruleSuper = hsDeclBool spec }
-            return [spec]
+            pure [spec]
     f HsInstDecl { .. } = do
 	tcClassHead hsDeclClassHead
         ch <- getClassHierarchy
@@ -633,31 +633,31 @@ tcMiscDecl d = withContext (locMsg (srcLoc d) "in the declaration" "") $ f d whe
 	    case maybeGetDeclName d of
 		Just n -> when (n `notElem` fsts as) $ do
 		    addWarn InvalidDecl $ printf "Cannot declare '%s' in instance because it is not a method of class '%s'" (show n) (show $ hsClassHead hsDeclClassHead)
-		Nothing -> return ()
-	return []
+		Nothing -> pure ()
+	pure []
 
     f i@HsDeclDeriving {} = tcClassHead (hsDeclClassHead i)
     f (HsPragmaRules rs) = do
         rs' <- mapM tcRule rs
-        return [HsPragmaRules rs']
+        pure [HsPragmaRules rs']
     f fd@(HsForeignDecl _ _ n qt) = do
         kt <- getKindEnv
         s <- hsQualTypeToSigma kt qt
         addToCollectedEnv (Map.singleton (toName Val n) s)
-        return []
+        pure []
     f fd@(HsForeignExport _ e n qt) = do
         kt <- getKindEnv
         s <- hsQualTypeToSigma kt qt
         addToCollectedEnv (Map.singleton (ffiExportName e) s)
-        return []
-    f _ = return []
+        pure []
+    f _ = pure []
     tcClassHead cHead@HsClassHead { .. } = do
         ch <- getClassHierarchy
         ke <- getKindEnv
         let supers = asksClassRecord ch hsClassHead classSupers
             (ctx,(_,[a])) = chToClassHead ke cHead
         assertEntailment ctx [ IsIn s a | s <- supers]
-        return []
+        pure []
 
 
 tcRule prule@HsRule { hsRuleUniq = uniq, hsRuleFreeVars = vs, hsRuleLeftExpr = e1, hsRuleRightExpr = e2, hsRuleSrcLoc = sloc } =
@@ -672,7 +672,7 @@ tcRule prule@HsRule { hsRuleUniq = uniq, hsRuleFreeVars = vs, hsRuleLeftExpr = e
                     (e2,ps2) <- listenPreds (tcExpr e2 tr)
                     ([],rs1) <- splitPreds ch Set.empty ps1
                     ([],rs2) <- splitPreds ch Set.empty ps2
-                    return ((e1,rs1),(e2,rs2))
+                    pure ((e1,rs1),(e2,rs2))
             mapM_ unBox vs
             vs <- flattenType vs
             tr <- flattenType tr
@@ -681,21 +681,21 @@ tcRule prule@HsRule { hsRuleUniq = uniq, hsRuleFreeVars = vs, hsRuleLeftExpr = e
             sequence_ [ varBind mv (TVar v) | v <- nvs |  mv <- mvs ]
             (rs1,rs2) <- flattenType (rs1,rs2)
             ch <- getClassHierarchy
-            rs1 <- return $ simplify ch rs1
-            rs2 <- return $ simplify ch rs2
+            rs1 <- pure $ simplify ch rs1
+            rs2 <- pure $ simplify ch rs2
             assertEntailment rs1 rs2
-            return prule { hsRuleLeftExpr = e1, hsRuleRightExpr = e2 }
+            pure prule { hsRuleLeftExpr = e1, hsRuleRightExpr = e2 }
         dv (n,Nothing) = do
             v <- newMetaVar Tau kindStar
             let env = (Map.singleton (toName Val n) v)
             addToCollectedEnv env
-            return (v,env)
+            pure (v,env)
         dv (n,Just t) = do
             kt <- getKindEnv
             tt <- hsTypeToType kt t
             let env = (Map.singleton (toName Val n) tt)
             addToCollectedEnv env
-            return (tt,env)
+            pure (tt,env)
 
 tcDecl ::  HsDecl -> Sigma -> Tc (HsDecl,TypeEnv)
 
@@ -704,7 +704,7 @@ tcDecl decl@(HsActionDecl srcLoc pat@(HsPVar v) exp) typ = withContext (declDiag
     (pat',env) <- tcPat pat typ
     let tio = TCon (Tycon tc_IO (Kfun kindStar kindStar))
     e' <- tcExpr exp (TAp tio typ)
-    return (decl { hsDeclPat = pat', hsDeclExp = e' }, Map.singleton (toName Val v) typ)
+    pure (decl { hsDeclPat = pat', hsDeclExp = e' }, Map.singleton (toName Val v) typ)
 
 tcDecl decl@(HsPatBind sloc (HsPVar v) rhs wheres) typ = withContext (declDiagnostic decl) $ do
     typ <- evalType typ
@@ -712,21 +712,21 @@ tcDecl decl@(HsPatBind sloc (HsPVar v) rhs wheres) typ = withContext (declDiagno
     when ( v == mainFunc ) $ do
        tMain <- typeOfMainFunc
        typ `subsumes` tMain
-       return ()
+       pure ()
     (wheres', env) <- tcWheres wheres
     localEnv env $ do
     case rhs of
         HsUnGuardedRhs e -> do
             e' <- tcExpr e typ
-            return (HsPatBind sloc (HsPVar v) (HsUnGuardedRhs e') wheres', Map.singleton (toName Val v) typ)
+            pure (HsPatBind sloc (HsPVar v) (HsUnGuardedRhs e') wheres', Map.singleton (toName Val v) typ)
         HsGuardedRhss as -> do
             gas <- mapM (tcGuardedRhs typ) as
-            return (HsPatBind sloc (HsPVar v) (HsGuardedRhss gas) wheres', Map.singleton (toName Val v) typ)
+            pure (HsPatBind sloc (HsPVar v) (HsGuardedRhss gas) wheres', Map.singleton (toName Val v) typ)
 
 tcDecl decl@(HsFunBind matches) typ = withContext (declDiagnostic decl) $ do
     typ <- evalType typ
     matches' <- mapM (`tcMatch` typ) matches
-    return (HsFunBind matches', Map.singleton (getDeclName decl) typ)
+    pure (HsFunBind matches', Map.singleton (getDeclName decl) typ)
 
 tcDecl _ _ = error "Main.tcDecl: bad."
 
@@ -742,7 +742,7 @@ tcMatch (HsMatch sloc funName pats rhs wheres) typ = withContext (locMsg sloc "i
         lam [] typ rs = do
             (wheres', env) <- tcWheres wheres
             rhs <- localEnv env $ tcRhs rhs typ
-            return (HsMatch sloc funName (reverse rs) rhs wheres')
+            pure (HsMatch sloc funName (reverse rs) rhs wheres')
         lam _ t _ = do
             t <- flattenType t
             fail $ "expected a -> b, found: " ++ prettyPrintType t
@@ -752,14 +752,14 @@ tcMatch (HsMatch sloc funName pats rhs wheres) typ = withContext (locMsg sloc "i
             lam ps s rs
     typ <- evalType typ
     res <- lam pats typ []
-    return res
+    pure res
 
 typeOfMainFunc :: Tc Type
 typeOfMainFunc = do
     a <- newMetaVar Tau kindStar
     -- a <- newMetaVar Tau kindStar
     -- a <- Tvar `fmap` newVar kindStar
-    return $ tAp (TCon (Tycon tc_IO (Kfun kindStar kindStar))) a
+    pure $ tAp (TCon (Tycon tc_IO (Kfun kindStar kindStar))) a
 
 nameOfMainFunc :: Tc Name
 nameOfMainFunc = fmap (parseName Val . maybe "Main.main" snd . optMainFunc) getOptions
@@ -771,8 +771,8 @@ declDiagnostic decl@(HsFunBind matches) = locMsg (srcLoc decl) "in the function 
 declDiagnostic _ = error "Main.declDiagnostic: bad."
 
 tiExpl ::  Expl -> Tc (HsDecl,TypeEnv)
-tiExpl (sc, decl@HsForeignDecl {}) = do return (decl,Map.empty)
-tiExpl (sc, decl@HsForeignExport {}) = do return (decl,Map.empty)
+tiExpl (sc, decl@HsForeignDecl {}) = do pure (decl,Map.empty)
+tiExpl (sc, decl@HsForeignExport {}) = do pure (decl,Map.empty)
 tiExpl (sc, decl) = withContext (locSimple (srcLoc decl) ("in the explicitly typed " ++  (render $ ppHsDecl decl))) $ do
     when (dump FD.BoxySteps) $ liftIO $ putStrLn $ "** typing expl: " ++ show (getDeclName decl) ++ " " ++ prettyPrintType sc
     sc <- evalFullType sc
@@ -789,7 +789,7 @@ tiExpl (sc, decl) = withContext (locSimple (srcLoc decl) ("in the explicitly typ
     printRule $ "endtiExpl: " <+> show env <+> show ps <+> show qs <+> show ds <+> show rs
     addPreds ds
     assertEntailment qs rs
-    return ret
+    pure ret
 
 restricted :: Bool -> [HsDecl] -> Bool
 restricted monomorphismRestriction bs = any isHsActionDecl bs || (monomorphismRestriction && any isSimpleDecl bs) where
@@ -810,7 +810,7 @@ tiProgram bgs es = ans where
     --    ([],rs) <- splitPreds ch Set.empty ps
         (_,[],rs) <- splitReduce Set.empty Set.empty ps
         topDefaults rs
-        return r
+        pure r
     f pr (bg:bgs) rs  = do
         (ds,env) <- (tcBindGroup bg)
         let (pr',os) = progressStep pr '.'
@@ -820,29 +820,29 @@ tiProgram bgs es = ans where
         ch <- getClassHierarchy
         pdecls <- mapM tcMiscDecl es
         wdump FD.Progress $ liftIO $ do hPutStr stderr ")\n"
-        return (rs ++ concat pdecls)
+        pure (rs ++ concat pdecls)
 
 -- Typing Literals
 
 tiLit :: HsLiteral -> Tc Tau
-tiLit (HsChar _) = return tChar
-tiLit (HsCharPrim _) = return tCharzh
+tiLit (HsChar _) = pure tChar
+tiLit (HsCharPrim _) = pure tCharzh
 tiLit (HsInt _) = do
     v <- newVar kindStar
-    return $ TForAll [v] ([IsIn class_Num (TVar v)] :=> TVar v)
+    pure $ TForAll [v] ([IsIn class_Num (TVar v)] :=> TVar v)
     --(v) <- newBox Star
     --addPreds [IsIn class_Num v]
-    --return v
+    --pure v
 
 tiLit (HsFrac _) = do
     v <- newVar kindStar
-    return $ TForAll [v] ([IsIn class_Fractional (TVar v)] :=> TVar v)
+    pure $ TForAll [v] ([IsIn class_Fractional (TVar v)] :=> TVar v)
     --    (v) <- newBox Star
     --    addPreds [IsIn class_Fractional v]
-    --    return v
+    --    pure v
 
-tiLit (HsStringPrim _)  = return (TCon (Tycon tc_BitsPtr kindHash))
-tiLit (HsString _)  = return tString
+tiLit (HsStringPrim _)  = pure (TCon (Tycon tc_BitsPtr kindHash))
+tiLit (HsString _)  = pure tString
 tiLit _ = error "Main.tiLit: bad."
 
 ------------------------------------------

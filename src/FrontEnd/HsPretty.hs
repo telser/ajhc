@@ -76,7 +76,7 @@ defaultMode = PPHsMode{
 newtype DocM s a = DocM (s -> a)
 
 instance Functor (DocM s) where
-	 fmap f xs = do x <- xs; return (f x)
+	 fmap f xs = do x <- xs; pure (f x)
 
 instance Monad (DocM s) where
 	(>>=) = thenDocM
@@ -109,60 +109,60 @@ type Doc = DocM PPHsMode P.Doc
 -- The pretty printing combinators
 
 nest :: Int -> Doc -> Doc
-nest i m = m >>= return . P.nest i
+nest i m = m >>= pure . P.nest i
 
 dropAs (HsAsPat _ e) = e
 dropAs e = e
 
 -- Literals
 instance DL.TextLike Doc where
-    empty = return P.empty
-    text = return . P.text
-    char = return . P.char
+    empty = pure P.empty
+    text = pure . P.text
+    char = pure . P.char
 
 int :: Int -> Doc
-int = return . P.int
+int = pure . P.int
 
 integer :: Integer -> Doc
-integer = return . P.integer
+integer = pure . P.integer
 
 float :: Float -> Doc
-float = return . P.float
+float = pure . P.float
 
 double :: Double -> Doc
-double = return . P.double
+double = pure . P.double
 
 -- Simple Combining Forms
 
 parens, brackets, braces :: Doc -> Doc
-parens d = d >>= return . P.parens
-parenszh d = d >>= \d' -> return $ P.text "(# " P.<> d' P.<> P.text " #)"
+parens d = d >>= pure . P.parens
+parenszh d = d >>= \d' -> pure $ P.text "(# " P.<> d' P.<> P.text " #)"
 
-brackets d = d >>= return . P.brackets
-braces d = d >>= return . P.braces
+brackets d = d >>= pure . P.brackets
+braces d = d >>= pure . P.braces
 
 -- Constants
 
 semi,comma,equals :: Doc
-semi = return P.semi
-comma = return P.comma
-equals = return P.equals
+semi = pure P.semi
+comma = pure P.comma
+equals = pure P.equals
 
 -- Combinators
 --
 instance DocLike Doc where
-    aM <> bM = do{a<-aM;b<-bM;return (a P.<> b)}
-    aM <+> bM = do{a<-aM;b<-bM;return (a P.<+> b)}
-    aM <$> bM = do{a<-aM;b<-bM;return (a P.$$ b)}
-    hcat dl = sequence dl >>= return . P.hcat
-    hsep dl = sequence dl >>= return . P.hsep
-    vcat dl = sequence dl >>= return . P.vcat
+    aM <> bM = do{a<-aM;b<-bM;pure (a P.<> b)}
+    aM <+> bM = do{a<-aM;b<-bM;pure (a P.<+> b)}
+    aM <$> bM = do{a<-aM;b<-bM;pure (a P.$$ b)}
+    hcat dl = sequence dl >>= pure . P.hcat
+    hsep dl = sequence dl >>= pure . P.hsep
+    vcat dl = sequence dl >>= pure . P.vcat
 
 ($$) :: Doc -> Doc -> Doc
-aM $$ bM = do{a<-aM;b<-bM;return (a P.$$ b)}
+aM $$ bM = do{a<-aM;b<-bM;pure (a P.$$ b)}
 
 fsep :: [Doc] -> Doc
-fsep dl = sequence dl >>= return . P.fsep
+fsep dl = sequence dl >>= pure . P.fsep
 
 -- Yuk, had to cut-n-paste this one from Pretty.hs
 punctuate :: Doc -> [Doc] -> [Doc]
@@ -335,7 +335,7 @@ ppWhere l = nest 2 (text "where" $$$ body whereIndent (map ppHsDecl l))
 mprintExists :: HsConDecl -> Doc
 mprintExists hcd = case hsConDeclExists hcd of
     [] -> empty
-    vs -> text "exists" <+> hsep (map (return . pprint) vs) <+> char '.'
+    vs -> text "exists" <+> hsep (map (pure . pprint) vs) <+> char '.'
 
 ppHsConstr :: HsConDecl -> Doc
 ppHsConstr cd@HsRecDecl { hsConDeclName = name, hsConDeclRecArg = fieldList } =
@@ -403,13 +403,13 @@ ppHsTypePrec p (HsTyVar name) = ppHsName name
 ppHsTypePrec p (HsTyCon name) = ppHsQName name
 ppHsTypePrec p HsTyForall { hsTypeVars = vs, hsTypeType = qt } = parensIf (p > 1) $ do
     pp <- ppHsQualType qt
-    return $ DL.text "forall" DL.<+> DL.hsep (map pprint vs) DL.<+> DL.char '.' DL.<+> pp
+    pure $ DL.text "forall" DL.<+> DL.hsep (map pprint vs) DL.<+> DL.char '.' DL.<+> pp
 ppHsTypePrec p HsTyExists { hsTypeVars = vs, hsTypeType = qt } = parensIf (p > 1) $ do
     pp <- ppHsQualType qt
-    return $ DL.text "exists" DL.<+> DL.hsep (map pprint vs) DL.<+> DL.char '.' DL.<+> pp
+    pure $ DL.text "exists" DL.<+> DL.hsep (map pprint vs) DL.<+> DL.char '.' DL.<+> pp
 ppHsTypePrec _ HsTyExpKind { hsTyLType = Located _ t, hsTyKind = k } = do
     t <- ppHsType t
-    return $ DL.parens ( t DL.<+> DL.text "::" DL.<+> pprint k)
+    pure $ DL.parens ( t DL.<+> DL.text "::" DL.<+> pprint k)
 ppHsTypePrec _ _ = error "HsPretty.ppHsTypePrec: bad."
 
 instance DL.DocLike d => P.PPrint d HsKind where

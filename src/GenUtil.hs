@@ -170,7 +170,7 @@ groupFst = groupBy (\(x,_) (y,_) -> x == y)
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = do
     res <- mapM f xs
-    return $ concat res
+    pure $ concat res
 
 on :: (a -> a -> b) -> (c -> a) -> c -> c -> b
 (*) `on` f = \x y -> f x * f y
@@ -179,14 +179,14 @@ mapMsnd :: Monad m => (b -> m c) -> [(a,b)] -> m [(a,c)]
 mapMsnd f xs = do
     let g (a,b) = do
             c <- f b
-            return (a,c)
+            pure (a,c)
     mapM g xs
 
 mapMfst :: Monad m => (b -> m c) -> [(b,a)] -> m [(c,a)]
 mapMfst f xs = do
     let g (a,b) = do
             c <- f a
-            return (c,b)
+            pure (c,b)
     mapM g xs
 
 rspan :: (a -> Bool) -> [a] -> ([a], [a])
@@ -339,8 +339,8 @@ repeatM x = sequence $ repeat x
 repeatM_ :: Monad m => m a -> m ()
 repeatM_ x = sequence_ $ repeat x
 
-{-# RULES "replicateM/0" replicateM 0 = const (return []) #-}
-{-# RULES "replicateM_/0" replicateM_ 0 = const (return ()) #-}
+{-# RULES "replicateM/0" replicateM 0 = const (pure []) #-}
+{-# RULES "replicateM_/0" replicateM_ 0 = const (pure ()) #-}
 
 {-# SPECIALIZE replicateM :: Int -> IO a -> IO [a] #-}
 replicateM :: Monad m => Int -> m a -> m [a]
@@ -352,12 +352,12 @@ replicateM_ n x = sequence_ $ replicate n x
 
 -- | convert a maybe to an arbitrary failable monad
 maybeToMonad :: Monad m => Maybe a -> m a
-maybeToMonad (Just x) = return x
+maybeToMonad (Just x) = pure x
 maybeToMonad Nothing = fail "Nothing"
 
 -- | convert a maybe to an arbitrary failable monad
 maybeM :: Monad m => String -> Maybe a -> m a
-maybeM _ (Just x) = return x
+maybeM _ (Just x) = pure x
 maybeM s Nothing = fail s
 
 toMonadM :: Monad m => m (Maybe a) -> m a
@@ -365,17 +365,17 @@ toMonadM action = join $ liftM maybeToMonad action
 
 foldlM :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
 foldlM f v (x:xs) = (f v x) >>= \a -> foldlM f a xs
-foldlM _ v [] = return v
+foldlM _ v [] = pure v
 
 foldl1M :: Monad m => (a -> a -> m a) ->  [a] -> m a
 foldl1M f (x:xs) = foldlM f x xs
 foldl1M _ _ = error "foldl1M"
 
 foldlM_ :: Monad m => (a -> b -> m a) -> a -> [b] -> m ()
-foldlM_ f v xs = foldlM f v xs >> return ()
+foldlM_ f v xs = foldlM f v xs >> pure ()
 
 foldl1M_ ::Monad m => (a -> a -> m a)  -> [a] -> m ()
-foldl1M_ f xs = foldl1M f xs >> return ()
+foldl1M_ f xs = foldl1M f xs >> pure ()
 
 -- | partition a list of eithers.
 splitEither :: [Either a b] -> ([a],[b])
@@ -392,7 +392,7 @@ isRight Right {} = True
 isRight _ = False
 
 perhapsM :: Monad m => Bool -> a -> m a
-perhapsM True a = return a
+perhapsM True a = pure a
 perhapsM False _ = fail "perhapsM"
 
 sameLength (_:xs) (_:ys) = sameLength xs ys
@@ -429,11 +429,11 @@ lefts xs = [x | Left x <- xs]
 
 -- | Trasform IO errors into the failing of an arbitrary monad.
 ioM :: Monad m => IO a -> IO (m a)
-ioM action = iocatch (fmap return action) (\e -> return (fail (show e)))
+ioM action = iocatch (fmap pure action) (\e -> pure (fail (show e)))
 
 -- | Trasform IO errors into the mzero of an arbitrary member of MonadPlus.
 ioMp :: MonadPlus m => IO a -> IO (m a)
-ioMp action = iocatch (fmap return action) (\_ -> return mzero)
+ioMp action = iocatch (fmap pure action) (\_ -> pure mzero)
 
 -- | reformat a string to not be wider than a given width, breaking it up
 -- between words.
@@ -542,7 +542,7 @@ shellQuote ss = unwords (map f ss) where
 -- | looks up an enviornment variable and returns it in an arbitrary Monad rather
 -- than raising an exception if the variable is not set.
 lookupEnv :: Monad m => String -> IO (m String)
-lookupEnv s = catch (fmap return $ getEnv s) (\e -> if isDoesNotExistError e then return (fail (show e)) else ioError e)
+lookupEnv s = catch (fmap pure $ getEnv s) (\e -> if isDoesNotExistError e then pure (fail (show e)) else ioError e)
 
 {-# SPECIALIZE fmapLeft :: (a -> c) -> [(Either a b)] -> [(Either c b)] #-}
 fmapLeft :: Functor f => (a -> c) -> f (Either a b) -> f (Either c b)
@@ -594,7 +594,7 @@ count f xs = g 0 xs where
 
 -- | randomly permute a list, using the standard random number generator.
 randomPermuteIO :: [a] -> IO [a]
-randomPermuteIO xs = newStdGen >>= \g -> return (randomPermute g xs)
+randomPermuteIO xs = newStdGen >>= \g -> pure (randomPermute g xs)
 
 -- | randomly permute a list given a RNG
 randomPermute :: StdGen -> [a] -> [a]
@@ -619,13 +619,13 @@ powerSet (x:xs) = xss /\/ map (x:) xss
 []     /\/ ys = ys
 (x:xs) /\/ ys = x : (ys /\/ xs)
 
-readHexChar a | a >= '0' && a <= '9' = return $ ord a - ord '0'
-readHexChar a | z >= 'a' && z <= 'f' = return $ 10 + ord z - ord 'a' where z = toLower a
+readHexChar a | a >= '0' && a <= '9' = pure $ ord a - ord '0'
+readHexChar a | z >= 'a' && z <= 'f' = pure $ 10 + ord z - ord 'a' where z = toLower a
 readHexChar x = fail $ "not hex char: " ++ [x]
 
 readHex :: Monad m => String -> m Int
 readHex [] = fail "empty string"
-readHex cs = mapM readHexChar cs >>= \cs' -> return (rh $ reverse cs') where
+readHex cs = mapM readHexChar cs >>= \cs' -> pure (rh $ reverse cs') where
     rh (c:cs) =  c + 16 * (rh cs)
     rh [] =  0
 
@@ -657,7 +657,7 @@ getArgContents = do
     let f "-" = getContents
         f fn = readFile fn
     cs <- mapM f as
-    if null as then getContents else return $ concat cs
+    if null as then getContents else pure $ concat cs
 
 -- | Combination of parseOpt and getArgContents.
 getOptContents :: String -> IO (String,[Char],[(Char,String)])
@@ -667,8 +667,8 @@ getOptContents args = do
     let f "-" = getContents
         f fn = readFile fn
     cs <- mapM f as
-    s <- if null as then getContents else return $ concat cs
-    return (s,o1,o2)
+    s <- if null as then getContents else pure $ concat cs
+    pure (s,o1,o2)
 
 -- | Process options with an option string like the standard C getopt function call.
 parseOpt :: Monad m =>
@@ -681,8 +681,8 @@ parseOpt ps as = f ([],[],[]) as where
         g (c:':':ps) x y = g ps x (c:y)
         g (c:ps) x y = g ps (c:x) y
         g [] x y = (x,y)
-    f cs [] = return cs
-    f (xs,ys,zs) ("--":rs) = return (xs ++ rs, ys, zs)
+    f cs [] = pure cs
+    f (xs,ys,zs) ("--":rs) = pure (xs ++ rs, ys, zs)
     f cs (('-':as@(_:_)):rs) = z cs as where
         z (xs,ys,zs) (c:cs)
             | c `elem` args = z (xs,c:ys,zs) cs
@@ -697,13 +697,13 @@ parseOpt ps as = f ([],[],[]) as where
 
 readM :: (Monad m, Read a) => String -> m a
 readM cs = case [x | (x,t) <-  reads cs, ("","") <- lex t] of
-    [x] -> return x
+    [x] -> pure x
     [] -> fail "readM: no parse"
     _ -> fail "readM: ambiguous parse"
 
 readsM :: (Monad m, Read a) => String -> m (a,String)
 readsM cs = case readsPrec 0 cs of
-    [(x,s)] -> return (x,s)
+    [(x,s)] -> pure (x,s)
     _ -> fail "cannot readsM"
 
 -- | Splits a list into components delimited by separators, where the
@@ -742,11 +742,11 @@ doTime str action = do
     x <- action
     end <- getCPUTime
     putStrLn $ "Timing: " ++ str ++ " " ++ show ((end - start) `div` cpuTimePrecision)
-    return x
+    pure x
 
 getPrefix :: Monad m => String -> String -> m String
 getPrefix a b = f a b where
-    f [] ss = return ss
+    f [] ss = pure ss
     f _  [] = fail "getPrefix: value too short"
     f (p:ps) (s:ss)
         | p == s = f ps ss

@@ -29,12 +29,12 @@ lintCheckGrin grin = when flint $ typecheckGrin grin
 lintCheckGrin' onerr grin | flint = do
     let env = TcEnv { envTyEnv = grinTypeEnv grin, envInScope = fromList (fsts $ grinCafs grin) }
     let errs = [  (err ++ "\n" ++ render (prettyFun a) ) | (a,Left err) <-  [ (a,runTc env (tcLam Nothing c))  | a@(_,c) <-  grinFuncs grin ]]
-    if null errs then return () else do
+    if null errs then pure () else do
     onerr
     putErrLn ">>> Type Errors"
     mapM_ putErrLn  errs
     unless (null errs || optKeepGoing options) $ fail "There were type errors!"
-lintCheckGrin' _ _ = return ()
+lintCheckGrin' _ _ = pure ()
 
 typecheckGrin grin = do
     let env = TcEnv { envTyEnv = grinTypeEnv grin, envInScope = fromList (fsts $ grinCafs grin) }
@@ -138,7 +138,7 @@ printDL h n fs e = f fs e where
         forM_ defs $ \d -> printFunc h (funcDefName d) (funcDefBody d)
         forM_ defs $ \d -> hPrintf h "subfunc(%s,%s).\n" (dshow $ funcDefName d) (dshow n)
         f b body
-    f b Error {} = return ()
+    f b Error {} = pure ()
     f b Call { expValue = Item fn _, expArgs =  as, expType = ty} = do
         forM_ (zip naturals as) $ \ (i,a) -> do
             assign "assign" (Left $ funArg fn i) a
@@ -150,7 +150,7 @@ printDL h n fs e = f fs e where
     --    hPrintf h "lazyfunc(%s).\n" (dshow fn)
     --    forM_ (zip naturals as) $ \ (i,a) -> do
     --        assign "assign" (Left $ funArg fn i) a
-    --app _ _ = return ()
+    --app _ _ = pure ()
     assign op b v = genAssign op b (Right v)
 
     genAssign :: String -> Either String Val -> Either String Val -> IO ()
@@ -166,8 +166,8 @@ tyInteresting ty = ty == TyNode || ty == tyINode
 
 transformGrin :: TransformParms Grin -> Grin -> IO Grin
 
-transformGrin TransformParms { transformIterate = IterateMax n } prog | n <= 0 = return prog
-transformGrin TransformParms { transformIterate = IterateExactly n } prog | n <= 0 = return prog
+transformGrin TransformParms { transformIterate = IterateMax n } prog | n <= 0 = pure prog
+transformGrin TransformParms { transformIterate = IterateExactly n } prog | n <= 0 = pure prog
 transformGrin tp prog = do
     let dodump = transformDumpProgress tp
         name = transformCategory tp ++ pname (transformPass tp) ++ pname (transformName tp)
@@ -183,7 +183,7 @@ transformGrin tp prog = do
         putErrLn $ "\n>>>"
         putErrLn (show (e::SomeException'))
         maybeDie
-        return prog
+        pure prog
     let istat = grinStats prog
     prog' <- Control.Exception.catch (transformOperation tp prog { grinStats = mempty } >>= Control.Exception.evaluate ) ferr
     let estat = grinStats prog'
@@ -195,17 +195,17 @@ transformGrin tp prog = do
             dumpGrin ("lint-after-" ++ name) grin'
     if transformSkipNoStats tp && Stats.null estat then do
         when dodump $ putErrLn "program not changed"
-        return prog
+        pure prog
      else do
     when (dodump && not (Stats.null estat)) $ Stats.printStat  name estat
     lintCheckGrin' (onerr prog') prog'
     let tstat = istat `mappend` estat
-    if doIterate iterate (not $ Stats.null estat) then transformGrin tp { transformIterate = iterateStep iterate } prog' { grinStats = tstat } else return prog' { grinStats = tstat }
+    if doIterate iterate (not $ Stats.null estat) then transformGrin tp { transformIterate = iterateStep iterate } prog' { grinStats = tstat } else pure prog' { grinStats = tstat }
 --    if doIterate iterate (estat /= mempty) then transformGrin tp { transformIterate = iterateStep iterate } prog' { progStats = istat `mappend` estat } else
---        return prog' { progStats = istat `mappend` estat, progPasses = name:progPasses prog' }
+--        pure prog' { progStats = istat `mappend` estat, progPasses = name:progPasses prog' }
 
 maybeDie = case optKeepGoing options of
-    True -> return ()
+    True -> pure ()
     False -> putErrDie "Internal Error"
 
 data TcEnv = TcEnv {
@@ -222,7 +222,7 @@ tcErr s = Tc $ lift (Left s)
 runTc :: TcEnv -> Tc a -> Either String a
 runTc env (Tc r) = runReaderT r env
 
-same _ t1 t2 | t1 == t2 = return t1
+same _ t1 t2 | t1 == t2 = pure t1
 same msg t1 t2 = tcErr $ "Types not the same:" <+> parens msg <+> parens (tshow t1) <+> parens (tshow t2)
 
 tcLam :: Maybe [Ty] -> Lam -> Tc [Ty]
@@ -240,54 +240,54 @@ tcExp e = f e where
         tcLam (Just t1) lam
     f n@(Prim p as t') = do
         mapM_ tcVal as
-        return t'
+        pure t'
     f ap@(BaseOp (Apply t) vs) = do
         (v':_) <- mapM tcVal vs
-        if v' == TyNode then return t
+        if v' == TyNode then pure t
          else tcErr $ "App apply arg doesn't match: " ++ show ap
     f ap@(BaseOp Eval [v]) = do
         v' <- tcVal v
-        if v' == tyINode then return [TyNode]
+        if v' == tyINode then pure [TyNode]
          else tcErr $ "App eval arg doesn't match: " ++ show ap
     f a@(App fn as t) = do
         te <- asks envTyEnv
         (as',t') <- findArgsType te fn
         as'' <- mapM tcVal as
         if t' == t then
-            if as'' == as' then return t' else
+            if as'' == as' then pure t' else
                 tcErr $ "App: arguments do not match: " ++ show (a,as',t')
          else tcErr $ "App: results do not match: " ++ show (a,t,(as',t'))
     f e@(BaseOp (StoreNode _) vs) = do
-        [NodeC {}] <- return vs
+        [NodeC {}] <- pure vs
         mapM_ tcVal vs
-        return (getType e)
+        pure (getType e)
     f Alloc { expValue = v, expCount = c, expRegion = r } = do
         t <- tcVal v
         tcVal c
         tcVal r
-        return [TyPtr t]
+        pure [TyPtr t]
     f (Return v) = mapM tcVal v
     f (BaseOp Promote [v]) = do
         TyINode <- tcVal v
-        return [TyNode]
+        pure [TyNode]
     f (BaseOp Demote [v]) = do
         TyNode <- tcVal v
-        return [TyINode]
-    f (Error _ t) = return t
+        pure [TyINode]
+    f (Error _ t) = pure t
     f e@(BaseOp Overwrite [w,v]) = do
-        NodeC {} <- return v
+        NodeC {} <- pure v
         tcVal w
         tcVal v
-        return []
+        pure []
     f e@(BaseOp PokeVal [w,v]) = do
         TyPtr t <- tcVal w
         tv <- tcVal v
         when (t /= tv) $
             tcErr "PokeVal: types don't match"
-        return []
+        pure []
     f e@(BaseOp PeekVal [w]) = do
         TyPtr t <- tcVal w
-        return [t]
+        pure [t]
     f (Case _ []) = tcErr "empty case"
     f (Case v as) = do
         tv <- tcVal v
@@ -304,25 +304,25 @@ tcVal v = f v where
     f e@(Var v t) = do
         s <- asks envInScope
         case v `member` s of
-            True -> return t
+            True -> pure t
             False -> tcErr $ "variable not in scope: " ++ show e
-    f (Lit _ t) = return t
-    f Unit = return TyUnit
+    f (Lit _ t) = pure t
+    f Unit = pure TyUnit
     f (Const t) = do
         v <- f t
         case v of
-            TyNode -> return TyINode
-            v -> return (TyPtr v)
+            TyNode -> pure TyINode
+            v -> pure (TyPtr v)
     f (Index v offset) = do
         t <- f v
         TyPrim _ <- f offset
-        return t
-    f (ValUnknown ty) = return ty
-    f (ValPrim _ vs ty) = do mapM_ f vs >> return ty
+        pure t
+    f (ValUnknown ty) = pure ty
+    f (ValPrim _ vs ty) = do mapM_ f vs >> pure ty
     f n@(NodeC tg as) = do
         te <- asks envTyEnv
         (as',_) <- findArgsType te tg
         as'' <- mapM f as
-        if as'' == as' then return TyNode else
+        if as'' == as' then pure TyNode else
             tcErr $ "NodeC: arguments do not match " ++ show n ++ show (as'',as')
-    f (Item _ t) = return t
+    f (Item _ t) = pure t

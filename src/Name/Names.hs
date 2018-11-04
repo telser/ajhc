@@ -37,7 +37,7 @@ nameTuple t n = toName t  $ (toTuple n:: (String,String)) -- Qual (HsIdent ("(" 
 
 unboxedNameTuple t n = toName t $ "(#" ++ show n ++ "#)"
 fromUnboxedNameTuple n = case show n of
-    '(':'#':xs | (ns@(_:_),"#)") <- span isDigit xs -> return (read ns::Int)
+    '(':'#':xs | (ns@(_:_),"#)") <- span isDigit xs -> pure (read ns::Int)
     _ -> fail $ "Not unboxed tuple: " ++ show n
 
 instance FromTupname Name where

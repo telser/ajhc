@@ -178,7 +178,7 @@ instance Binary Tyvar where
     get = do
         aa <- get
         ab <- get
-        return (Tyvar aa ab)
+        pure (Tyvar aa ab)
 
 instance DocLike d => PPrint d Module where
    pprint (Module s) = tshow s
@@ -208,17 +208,17 @@ prettyPrintTypePrec n t  = unparse $ zup (runIdentity (runVarNameT (f t))) where
     app = bop (L,100) (text " ")
     fp (IsIn cn t) = do
         t' <- f t
-        return (atom (text $ show cn) `app` t')
+        pure (atom (text $ show cn) `app` t')
     fp (IsEq t1 t2) = do
         t1' <- f t1
         t2' <- f t2
-        return (atom (parens $ unparse t1' <+> text "=" <+> unparse t2'))
+        pure (atom (parens $ unparse t1' <+> text "=" <+> unparse t2'))
     f (TForAll [] ([] :=> t)) = f t
     f (TForAll vs (ps :=> t)) = do
         withNewNames vs $ \ts' -> do
         t' <- f t
         ps' <- mapM fp ps
-        return $ case ps' of
+        pure $ case ps' of
             [] ->  fixitize (N,-3) $ pop (text "forall" <+> hsep (map text ts') <+> text ". ")  (atomize t')
             [p] -> fixitize (N,-3) $ pop (text "forall" <+> hsep (map text ts') <+> text "." <+> unparse p <+> text "=> ")  (atomize t')
             ps ->  fixitize (N,-3) $ pop (text "forall" <+> hsep (map text ts') <+> text "." <+> tupled (map unparse ps) <+> text "=> ")  (atomize t')
@@ -227,36 +227,36 @@ prettyPrintTypePrec n t  = unparse $ zup (runIdentity (runVarNameT (f t))) where
         withNewNames vs $ \ts' -> do
         t' <- f t
         ps' <- mapM fp ps
-        return $ case ps' of
+        pure $ case ps' of
             [] ->  fixitize (N,-3) $ pop (text "exists" <+> hsep (map text ts') <+> text ". ")  (atomize t')
             [p] -> fixitize (N,-3) $ pop (text "exists" <+> hsep (map text ts') <+> text "." <+> unparse p <+> text "=> ")  (atomize t')
             ps ->  fixitize (N,-3) $ pop (text "exists" <+> hsep (map text ts') <+> text "." <+> tupled (map unparse ps) <+> text "=> ")  (atomize t')
-    f (TCon tycon) = return $ atom (pprint tycon)
+    f (TCon tycon) = pure $ atom (pprint tycon)
     f (TVar tyvar) = do
         vo <- maybeLookupName tyvar
         case vo of
-            Just c  -> return $ atom $ text c
-            Nothing -> return $ atom $ tshow (tyvarName tyvar)
+            Just c  -> pure $ atom $ text c
+            Nothing -> pure $ atom $ tshow (tyvarName tyvar)
     f (TAp (TCon (Tycon n _)) x) | n == tc_List = do
         x <- f x
-        return $ atom (char '[' <> unparse x <> char ']')
+        pure $ atom (char '[' <> unparse x <> char ']')
     f TAssoc { typeCon = con, typeClassArgs = cas, typeExtraArgs = eas } = do
         let x = atom (pprint con)
         xs <- mapM f (cas ++ eas)
-        return $ foldl app x xs
+        pure $ foldl app x xs
     f ta@(TAp {}) | (TCon (Tycon c _),xs) <- fromTAp ta, Just _ <- fromTupname c = do
         xs <- mapM f xs
-        return $ atom (tupled (map unparse xs))
+        pure $ atom (tupled (map unparse xs))
     f (TAp t1 t2) = do
         t1 <- f t1
         t2 <- f t2
-        return $ t1 `app` t2
+        pure $ t1 `app` t2
     f (TArrow t1 t2) = do
         t1 <- f t1
         t2 <- f t2
-        return $ t1 `arr` t2
-    f (TMetaVar mv) = return $ atom $ pprint mv
-    --f tv = return $ atom $ parens $ text ("FrontEnd.Tc.Type.pp: " ++ show tv)
+        pure $ t1 `arr` t2
+    f (TMetaVar mv) = pure $ atom $ pprint mv
+    --f tv = pure $ atom $ parens $ text ("FrontEnd.Tc.Type.pp: " ++ show tv)
 
 instance DocLike d => PPrint d MetaVarType where
     pprint  t = case t of

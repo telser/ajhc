@@ -181,7 +181,7 @@ instance (MonadReader r m) => MonadReader r (IdNameT m) where
 runIdNameT :: (Monad m) => IdNameT m a -> m (a,IdSet)
 runIdNameT (IdNameT x) = do
     (r,(used,bound)) <- runStateT x (mempty,mempty)
-    return (r,bound)
+    pure (r,bound)
 
 fromIdNameT (IdNameT x) = x
 
@@ -193,7 +193,7 @@ instance Monad m => NameMonad Id (IdNameT m) where
         modify (\ (used,bound) -> (nset `union` used, nset `union` bound) )
     uniqueName n = IdNameT $ do
         (used,bound) <- get
-        if n `member` bound then fromIdNameT newName else put (insert n used,insert n bound) >> return n
+        if n `member` bound then fromIdNameT newName else put (insert n used,insert n bound) >> pure n
     newNameFrom vs = IdNameT $ do
         (used,bound) <- get
         let f (x:xs)
@@ -202,7 +202,7 @@ instance Monad m => NameMonad Id (IdNameT m) where
             f [] = error "newNameFrom: finite list!"
             nn = f vs
         put (insert nn used, insert nn bound)
-        return nn
+        pure nn
     newName  = IdNameT $ do
         (used,bound) <- get
         fromIdNameT $ newNameFrom (candidateIds (size used `mixInt` size bound))
@@ -286,7 +286,7 @@ instance FromAtom Id where
 
 fromId :: Monad m => Id -> m Name
 fromId (Id i) = case intToAtom i of
-    Just a -> return $ fromAtom a
+    Just a -> pure $ fromAtom a
     Nothing -> fail $ "Name.fromId: not a name " ++ show (Id i)
 
 instance DocLike d => PPrint d Id where
@@ -307,8 +307,8 @@ instance B.Binary Id where
         case x of
             128 -> do
                 a <- B.get
-                return (toId $ fromAtom a)
+                pure (toId $ fromAtom a)
             129 -> do
                 v <- B.get
-                return (Id $ fromIntegral (v :: Int32))
-            _ -> return (Id $ fromIntegral x)
+                pure (Id $ fromIntegral (v :: Int32))
+            _ -> pure (Id $ fromIntegral x)

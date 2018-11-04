@@ -20,5 +20,5 @@ instance Show Number where
 
 toIntegral :: (Integral i,Monad m) => Number -> m i
 toIntegral (Number r) = case denominator r of
-    1 -> return $ fromInteger (numerator r)
+    1 -> pure $ fromInteger (numerator r)
     _ -> fail $ "toInteger: Number not integer " ++ show r

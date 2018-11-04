@@ -39,7 +39,7 @@ restrictTypeSynonyms f (TypeSynonyms fm) = TypeSynonyms (Map.filterWithKey (\k _
 showSynonym :: (DocLike d,Monad m) => (HsType -> d) -> Name -> TypeSynonyms -> m d
 showSynonym pprint n (TypeSynonyms m) =
     case Map.lookup n m of
-      Just (ns, t, _) -> return $ hsep (tshow n:map tshow ns) <+> text "=" <+> pprint t
+      Just (ns, t, _) -> pure $ hsep (tshow n:map tshow ns) <+> text "=" <+> pprint t
       Nothing         -> fail "key not found"
 
 showSynonyms :: DocLike d => (HsType -> d) -> TypeSynonyms -> d
@@ -66,7 +66,7 @@ declsToTypeSynonyms tsin ds = f tsin gr [] where
     f tsin (Left (n,(as,body,sl)):xs) rs = do
         body' <- removeSynonymsFromType tsin body
         f (tsInsert n (as,body',sl) tsin) xs ((n,(as,body',sl)):rs)
-    f _ [] rs = return $ TypeSynonyms (Map.fromList rs)
+    f _ [] rs = pure $ TypeSynonyms (Map.fromList rs)
 
 tsInsert x y (TypeSynonyms xs) = TypeSynonyms (Map.insert x y xs)
 
@@ -82,7 +82,7 @@ quantifyHsType inscope t
     fv (HsTyVar v) = tell [v]
     fv (HsTyForall vs qt) = tell $ snub (execWriter (fv $ hsQualTypeType qt)) \\ map hsTyVarBindName vs
     fv (HsTyExists vs qt) = tell $ snub (execWriter (fv $ hsQualTypeType qt)) \\ map hsTyVarBindName vs
-    fv x = traverseHsType (\x -> fv x >> return x) x >> return ()
+    fv x = traverseHsType (\x -> fv x >> pure x) x >> pure ()
 
 evalTypeSyms :: MonadWarn m => TypeSynonyms -> HsType -> m HsType
 evalTypeSyms (TypeSynonyms tmap) t = execUniqT 1 (eval [] t) where
@@ -100,7 +100,7 @@ evalTypeSyms (TypeSynonyms tmap) t = execUniqT 1 (eval [] t) where
     eval stack x = do
         t <- traverseHsType (eval []) x
         unwind t stack
-    unwind t [] = return t
+    unwind t [] = pure t
     unwind t (t1:rest) = do
         t1' <- eval [] t1
         unwind (HsTyApp t t1') rest
@@ -109,23 +109,23 @@ evalTypeSyms (TypeSynonyms tmap) t = execUniqT 1 (eval [] t) where
         let nvs = [ (hsTyVarBindName v,v { hsTyVarBindName = hsNameIdent_u ((show n ++ "00") ++) (hsTyVarBindName v)})| (n,v) <- zip ns vs ]
             nsm = Map.fromList [ (v,HsTyVar $ hsTyVarBindName t)| (v,t) <- nvs] `Map.union` sm
         t' <- substqt nsm t
-        return $ HsTyForall (snds nvs)  t'
+        pure $ HsTyForall (snds nvs)  t'
     subst sm (HsTyExists vs t) = do
         ns <- mapM (const newUniq) vs
         let nvs = [ (hsTyVarBindName v,v { hsTyVarBindName = hsNameIdent_u (hsIdentString_u ((show n ++ "00") ++)) (hsTyVarBindName v)})| (n,v) <- zip ns vs ]
             nsm = Map.fromList [ (v,HsTyVar $ hsTyVarBindName t)| (v,t) <- nvs] `Map.union` sm
         t' <- substqt nsm t
-        return $ HsTyExists (snds nvs)  t'
-    subst (sm::(Map.Map HsName HsType))  (HsTyVar n) | Just v <- Map.lookup n sm = return v
+        pure $ HsTyExists (snds nvs)  t'
+    subst (sm::(Map.Map HsName HsType))  (HsTyVar n) | Just v <- Map.lookup n sm = pure v
     subst sm t = traverseHsType (subst sm) t
     substqt sm qt@HsQualType { hsQualTypeContext = ps, hsQualTypeType = t } = do
         t' <- subst sm t
-        let f (HsAsst c xs) = return (HsAsst c (map g xs))
+        let f (HsAsst c xs) = pure (HsAsst c (map g xs))
             f (HsAsstEq a b) = do
                 a' <- subst sm a
                 b' <- subst sm b
-                return (HsAsstEq a' b')
+                pure (HsAsstEq a' b')
             g n =  case Map.lookup n sm of Just (HsTyVar n') -> n' ; _ -> n
         ps' <- mapM f ps -- = [ case Map.lookup n sm of Just (HsTyVar n') -> (c,n') ; _ -> (c,n) | (c,n) <- ps ]
 
-        return qt { hsQualTypeType = t', hsQualTypeContext = ps' }
+        pure qt { hsQualTypeType = t', hsQualTypeContext = ps' }

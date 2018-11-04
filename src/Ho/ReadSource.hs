@@ -50,10 +50,10 @@ preprocess opt fn lbs = do
                 m4p <- m4Prelude
                 maygm4 <- findExecutable "gm4"
                 readSystem (fromMaybe "m4" maygm4) $ ["-s", "-P"] ++ incFlags ++ defFlags ++ [m4p,fn]
-          | otherwise -> return lbs
+          | otherwise -> pure lbs
 
 m4Prelude :: IO FilePath
-m4Prelude = fileInTempDir "prelude.m4" $ \fp -> do putStrLn $ "Writing stuff:" ++ fp ; BS.writeFile fp prelude_m4 ; return ()
+m4Prelude = fileInTempDir "prelude.m4" $ \fp -> do putStrLn $ "Writing stuff:" ++ fp ; BS.writeFile fp prelude_m4 ; pure ()
 
 collectFileOpts options fn s = (lproc opt,isJust fopts)  where
     copts os = [ as | (x,as) <- popts, x `elem` os]
@@ -128,11 +128,11 @@ parseHsSource options fn lbs = do
         warn (bogusASrcLoc { srcLocFileName = packString fn })
             UnknownOption "Invalid options in OPTIONS pragma"
     case runParserWithMode (parseModeOptions fileOpts') { parseFilename = fn } parse  s'  of
-                      (ws,ParseOk e) -> processErrors ws >> return (e { hsModuleOpt = fileOpts' },LBSU.fromString s')
+                      (ws,ParseOk e) -> processErrors ws >> pure (e { hsModuleOpt = fileOpts' },LBSU.fromString s')
                       (_,ParseFailed sl err) -> putErrDie $ show sl ++ ": " ++ err
 
 fetchCompilerFlags :: IO (FilePath, [String]) -- ^ file path to compiler, compiler arguments
-fetchCompilerFlags = return (cc,args) where
+fetchCompilerFlags = pure (cc,args) where
     lup k = maybe "" id $ Map.lookup k (optInis options)
     boehmOpts | fopts FO.Boehm = ["-D_JHC_GC=_JHC_GC_BOEHM", "-lgc"]
               | fopts FO.Jgc   = ["-D_JHC_GC=_JHC_GC_JGC"]

@@ -22,21 +22,21 @@ whizState = Left mempty
 --normalizeGrin grin@Grin { grinFunctions = fs } = grin { grinFunctions = f fs [] (Right 1) } where
 --    f [] xs _ = xs
 --    f ((a,(Tup vs,fn)):xs) ys set = f xs ((a,(Tup vs',fn')):ys) set' where
---        (Identity ((NodeC _ vs',fn'),set')) = whiz return return set (NodeC tagHole vs , fn)
+--        (Identity ((NodeC _ vs',fn'),set')) = whiz pure pure set (NodeC tagHole vs , fn)
 normalizeGrin :: Grin -> Grin
 normalizeGrin grin = setGrinFunctions (f (grinFuncs grin) [] (Right 1)) grin  where
     f [] xs _ = reverse xs
     f ((a,lm):xs) ys set = f xs ((a,lm'):ys) set' where
-        (Identity (lm',set')) = fizz  (\_ x -> x) (return . Just) return set lm
+        (Identity (lm',set')) = fizz  (\_ x -> x) (pure . Just) pure set lm
 
 normalizeGrin' :: Grin -> Grin
 normalizeGrin' grin = setGrinFunctions (f (grinFuncs grin) []) grin  where
     f [] xs  = reverse xs
     f ((a,lm):xs) ys  = f xs ((a,lm'):ys) where
-        (Identity (lm',_)) = whiz (\_ x -> x) (return . Just) return (Right 1) lm
+        (Identity (lm',_)) = whiz (\_ x -> x) (pure . Just) pure (Right 1) lm
 
 whizExps :: Monad m => (Exp -> m Exp) -> Lam -> m Lam
-whizExps f l = liftM fst $ whiz (\_ x -> x) (\(p,e) -> f e >>= \e' -> return  (Just (p,e'))) f whizState l
+whizExps f l = liftM fst $ whiz (\_ x -> x) (\(p,e) -> f e >>= \e' -> pure  (Just (p,e'))) f whizState l
 
 -- | magic traversal and flattening routine.
 -- whiz traverses Grin code and right assosiates it as well as renaming and
@@ -66,7 +66,7 @@ whiz sub te tf inState start = res where
         z <- f b rs (env' `mappend` senv)
         let h [] = z
             h ((p,v):rs) = v :>>= p :-> h rs
-        return $ h [ (p,v) |  Just (p,v) <- ts]
+        pure $ h [ (p,v) |  Just (p,v) <- ts]
     f a ((senv,p,b):xs) env = do
         a <- g env a
         (p,env') <- renamePattern p
@@ -74,35 +74,35 @@ whiz sub te tf inState start = res where
         z <- f b xs (env' `mappend` senv)
         case x of
             Just (p',a') -> do
-                return $ a' :>>= (p' :-> z)
+                pure $ a' :>>= (p' :-> z)
             Nothing -> do
-                return z
+                pure z
     f x [] env = do
         x <- g env x
         lift $ tf x
     g env (Case v as) = do
         v <- applySubst env v
         as <- mapM (dc env) as
-        return $ Case v as
+        pure $ Case v as
     g env (GcRoots vs body) = do
         vs <- mapM (applySubst env) vs
         body <- f body [] env
-        return $ GcRoots vs body
+        pure $ GcRoots vs body
 --    g env lt@Let { expDefs = defs, expBody = Let { expDefs = defs', expBody = body } } = g env lt { expDefs = defs `mappend` defs', expBody = body }
     g env lt@Let { expDefs = defs, expBody = body } = do
         body <- f body [] env
         let f def@FuncDef { funcDefName = n, funcDefBody = b } = do
                 b <- dc env b
-                return $ createFuncDef True n b
+                pure $ createFuncDef True n b
         defs <- mapM f defs
-        return $ updateLetProps lt { expBody = body, expDefs = defs }
+        pure $ updateLetProps lt { expBody = body, expDefs = defs }
     g env x = applySubstE env x
     dc env (p :-> e) = do
         (p,env') <- renamePattern p
         g <- get
         (z,g) <- lift $ sub p $ runStateT  (f e [] (env' `mappend` env)) g
         put g
-        return (p :-> z)
+        pure (p :-> z)
 
 -- | magic traversal and flattening routine.
 -- whiz traverses Grin code and right assosiates it as well as renaming and
@@ -134,7 +134,7 @@ fizz sub te tf inState start = res where
         ts <- lift $ mapM te (reverse [([y],Return [x]) | x <- xs | y <- ys ])
         let h [] = z
             h ((p,v):rs) = v :>>= p :-> h rs
-        return $ h [ (p,v) |  Just (p,v) <- reverse ts]
+        pure $ h [ (p,v) |  Just (p,v) <- reverse ts]
     f (Error msg ty) [] env = do
         lift $ tf (Error msg ty)
     f (Error msg ty) ((_,_,b):xs) env = do
@@ -146,40 +146,40 @@ fizz sub te tf inState start = res where
         x <- lift $ te (p,a)
         case x of
             Just (p',a') -> do
-                return $ a' :>>= (p' :-> z)
+                pure $ a' :>>= (p' :-> z)
             Nothing -> do
-                return z
+                pure z
     f x [] env = do
         x <- g env x
         lift $ tf x
     g env (Case v as) = do
         v <- applySubst env v
         as <- mapM (dc env) as
-        return $ Case v as
+        pure $ Case v as
     g env (GcRoots vs body) = do
         vs <- mapM (applySubst env) vs
         body <- f body [] env
-        return $ GcRoots vs body
+        pure $ GcRoots vs body
     g env lt@Let { expDefs = defs, expBody = body } = do
         body <- f body [] env
         let f def@FuncDef { funcDefName = n, funcDefBody = b } = do
                 b <- dc env b
-                return $ createFuncDef True n b
+                pure $ createFuncDef True n b
         defs <- mapM f defs
-        return $ updateLetProps lt { expBody = body, expDefs = defs }
+        pure $ updateLetProps lt { expBody = body, expDefs = defs }
     g env x = applySubstE env x
     dc env (p :-> e) = do
         (p,env') <- renamePattern p
         g <- get
         (z,g) <- lift $ sub p $ runStateT  (f e [] (env' `mappend` env)) g
         put g
-        return (p :-> z)
+        pure (p :-> z)
 
 applySubstE env x = mapExpVal (applySubst env) x
 
 applySubst env x = f x where
     f var@(Var v _)
-        | Just n <- mlookup v env =  return n
+        | Just n <- mlookup v env =  pure n
     f x = mapValVal f x
 
 renamePattern :: MonadState (WhizState) m => [Val] ->  m ([Val],WhizEnv)
@@ -189,12 +189,12 @@ renamePattern x = runWriterT (mapM f x) where
         v' <- lift $ newVarName v
         let nv = Var v' t
         tell (msingleton v nv)
-        return nv
+        pure nv
     f (NodeC t vs) = do
         vs' <- mapM f vs
-        return $ NodeC t vs'
-    f (Index a b) = return Index `ap` f a `ap` f b
-    f x = return x
+        pure $ NodeC t vs'
+    f (Index a b) = pure Index `ap` f a `ap` f b
+    f x = pure x
 
 newVarName :: MonadState WhizState m => Var -> m Var
 newVarName (V sv) = do
@@ -205,7 +205,7 @@ newVarName (V sv) = do
                 v n | n `member` s = v (n + size s)
                     | otherwise = n
             put (Left $! insert nv s)
-            return (V nv)
+            pure (V nv)
         Right n -> do
             put $! (Right $! (n + 1))
-            return $ V n
+            pure $ V n

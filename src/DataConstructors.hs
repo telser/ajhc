@@ -90,27 +90,27 @@ tipe' (TAp t1 t2) = liftM2 eAp (tipe' t1) (tipe' t2)
 tipe' (TArrow t1 t2) =  do
     t1' <- tipe' t1
     t2' <- tipe' t2
-    return $ EPi (tVr emptyId (t1')) t2'
-tipe' (TCon (Tycon n k)) | Just n' <- Map.lookup n primitiveAliases = return $ ELit litCons { litName = n', litType = kind k }
-tipe' (TCon (Tycon n k)) =  return $ ELit litCons { litName = n, litType = kind k }
+    pure $ EPi (tVr emptyId (t1')) t2'
+tipe' (TCon (Tycon n k)) | Just n' <- Map.lookup n primitiveAliases = pure $ ELit litCons { litName = n', litType = kind k }
+tipe' (TCon (Tycon n k)) =  pure $ ELit litCons { litName = n, litType = kind k }
 tipe' (TVar tv@Tyvar { tyvarKind = k}) = do
     v <- lookupName tv
-    return $ EVar $ tVr v (kind k)
+    pure $ EVar $ tVr v (kind k)
 tipe' (TForAll [] (_ :=> t)) = tipe' t
 tipe' (TExists [] (_ :=> t)) = tipe' t
 tipe' (TForAll xs (_ :=> t)) = do
     xs' <- flip mapM xs $ \tv -> do
         v <- newName (map anonymous [35 .. ]) () tv
-        return $ tVr v (kind $ tyvarKind tv)
+        pure $ tVr v (kind $ tyvarKind tv)
     t' <- tipe' t
-    return $ foldr EPi t' xs' -- [ tVr n (kind k) | n <- [2,4..] | k <- xs ]
+    pure $ foldr EPi t' xs' -- [ tVr n (kind k) | n <- [2,4..] | k <- xs ]
 tipe' ~(TExists xs (_ :=> t)) = do
     xs' <- flip mapM xs $ \tv -> do
         --v <- newName [70,72..] () tv
-        --return $ tVr v (kind $ tyvarKind tv)
-        return $ (kind $ tyvarKind tv)
+        --pure $ tVr v (kind $ tyvarKind tv)
+        pure $ (kind $ tyvarKind tv)
     t' <- tipe' t
-    return $ ELit litCons { litName = unboxedNameTuple TypeConstructor (length xs' + 1), litArgs = (t':xs'), litType = eHash }
+    pure $ ELit litCons { litName = unboxedNameTuple TypeConstructor (length xs' + 1), litArgs = (t':xs'), litType = eHash }
 
 kind (KBase KUTuple) = eHash
 kind (KBase KHash) = eHash
@@ -195,7 +195,7 @@ instance HasSize DataTable where
 
 {-# NOINLINE getConstructor #-}
 getConstructor :: Monad m => Name -> DataTable -> m Constructor
-getConstructor n _ | isJust me = return (emptyConstructor {
+getConstructor n _ | isJust me = pure (emptyConstructor {
     conName = n, conType = e,
     conExpr = foldr ELam (foldl eAp (mktBox e) (map EVar tvrs)) tvrs,
     conInhabits = s_Star, conOrigSlots = map SlotNormal sts }) where
@@ -203,11 +203,11 @@ getConstructor n _ | isJust me = return (emptyConstructor {
         tvrs = [ tvr { tvrIdent = i , tvrType = t } | i <- anonymousIds | t <- sts ]
         (_,ss) = fromPi e
         me@(~(Just e)) = fromConjured modBox n `mplus` fromConjured modAbsurd n
-getConstructor n _ | RawType <- nameType n = return $ primitiveConstructor n
-getConstructor n _ | Just v <- fromUnboxedNameTuple n, DataConstructor <- nameType n = return $ snd $ tunboxedtuple v
-getConstructor n _ | Just v <- fromUnboxedNameTuple n, TypeConstructor <- nameType n = return $ fst $ tunboxedtuple v
+getConstructor n _ | RawType <- nameType n = pure $ primitiveConstructor n
+getConstructor n _ | Just v <- fromUnboxedNameTuple n, DataConstructor <- nameType n = pure $ snd $ tunboxedtuple v
+getConstructor n _ | Just v <- fromUnboxedNameTuple n, TypeConstructor <- nameType n = pure $ fst $ tunboxedtuple v
 getConstructor n (DataTable map) = case Map.lookup n map of
-    Just x -> return x
+    Just x -> pure x
     Nothing -> fail $ "getConstructor: " ++ show (nameType n,n)
 
 -- | return the single constructor of product types
@@ -327,7 +327,7 @@ typesCompatable a b = f etherealIds a b where
         f c (ELit (LitCons { litName = n, litArgs = [a',b'], litType = t })) (EPi (TVr { tvrIdent = eid, tvrType =  a}) b)  | eid == emptyId, conName tarrow == n, t == eStar = do
             f c a a'
             f c b b'
-        f _ a b | boxCompat a b || boxCompat b a = return ()
+        f _ a b | boxCompat a b || boxCompat b a = pure ()
         f _ a b = fail $ "Types don't match:" ++ pprint (a,b)
 
         lam :: TVr -> E -> TVr -> E -> [Id] -> m ()
@@ -340,14 +340,14 @@ typesCompatable a b = f etherealIds a b where
 extractPrimitive :: Monad m => DataTable -> E -> m (E,(ExtType,E))
 extractPrimitive dataTable e = case followAliases dataTable (getType e) of
     st@(ELit LitCons { litName = c, litArgs = [], litType = t })
-        | t == eHash -> return (e,(ExtType (packString $ show c),st))
+        | t == eHash -> pure (e,(ExtType (packString $ show c),st))
         | otherwise -> do
             Constructor { conChildren = DataNormal [cn] }  <- getConstructor c dataTable
             Constructor { conOrigSlots = [SlotNormal st] } <- getConstructor cn dataTable
-            (ELit LitCons { litName = n, litArgs = []}) <- return $ followAliases dataTable st
+            (ELit LitCons { litName = n, litArgs = []}) <- pure $ followAliases dataTable st
             let tvra = tVr vn st
                 (vn:_) = newIds (freeIds e)
-            return (eCase e  [Alt (litCons { litName = cn, litArgs = [tvra],
+            pure (eCase e  [Alt (litCons { litName = cn, litArgs = [tvra],
                 litType = (getType e) }) (EVar tvra)] Unknown,(ExtType (packString $ show n),st))
     e' -> fail $ "extractPrimitive: " ++ show (e,e')
 
@@ -359,22 +359,22 @@ boxPrimitive ::
     -> m (E,(ExtType,E))
 boxPrimitive dataTable e et = case followAliases dataTable et of
     st@(ELit LitCons { litName = c, litArgs = [], litType = t })
-        | t == eHash -> return (e,(ExtType . packString $ show c,st))
+        | t == eHash -> pure (e,(ExtType . packString $ show c,st))
         | otherwise -> do
             Constructor { conChildren = DataNormal [cn] }  <- getConstructor c dataTable
             Constructor { conOrigSlots = [SlotNormal st] } <- getConstructor cn dataTable
-            (ELit LitCons { litName = n, litArgs = []}) <- return $ followAliases dataTable st
+            (ELit LitCons { litName = n, litArgs = []}) <- pure $ followAliases dataTable st
             let tvra = tVr vn st
                 (vn:_) = newIds (freeVars (e,et))
             if isManifestAtomic e then
-                return $ (ELit litCons { litName = cn, litArgs = [e], litType = et },(ExtType . packString $ show n,st))
+                pure $ (ELit litCons { litName = cn, litArgs = [e], litType = et },(ExtType . packString $ show n,st))
              else
-                return $ (eStrictLet tvra e $ ELit litCons { litName = cn, litArgs = [EVar tvra], litType = et },(ExtType . packString $ show n,st))
+                pure $ (eStrictLet tvra e $ ELit litCons { litName = cn, litArgs = [EVar tvra], litType = et },(ExtType . packString $ show n,st))
     e' -> fail $ "boxPrimitive: " ++ show (e,e')
 
 extractIO :: Monad m => E -> m E
 extractIO e = f e where
-    f (ELit LitCons { litName = c, litArgs = [x] }) | c == tc_IO  = return x
+    f (ELit LitCons { litName = c, litArgs = [x] }) | c == tc_IO  = pure x
     f (ELit LitCons { litAliasFor = Just af, litArgs = as }) = f (foldl eAp af as)
     f _ = fail "extractIO: not an IO type"
 
@@ -403,44 +403,44 @@ lookupExtTypeInfo :: Monad m => DataTable -> E -> m ExtTypeInfo
 lookupExtTypeInfo dataTable oe = f Set.empty oe where
     f :: Monad m => Set.Set Name -> E -> m ExtTypeInfo
     -- handle the void context ones first
-    f _ e@(ELit LitCons { litName = c }) | c == tc_Unit || c == tc_State_ = return ExtTypeVoid
+    f _ e@(ELit LitCons { litName = c }) | c == tc_Unit || c == tc_State_ = pure ExtTypeVoid
     -- if the constructor is in the external type map, replace its external
     -- type with the one in the map
     f seen e@(ELit LitCons { litName = c, litArgs = [ta] }) | c == tc_Ptr = do
         ExtTypeBoxed b t _ <- g seen e  -- we know a pointer is a boxed BitsPtr
         case f seen ta of
-            Just (ExtTypeBoxed _ _ (ExtType et)) -> return $ ExtTypeBoxed b t (ExtType $ et `mappend` "*")
-            Just (ExtTypeRaw (ExtType et)) -> return $ ExtTypeBoxed b t (ExtType $ et `mappend` "*")
-            _ -> return $ ExtTypeBoxed b t "HsPtr"
+            Just (ExtTypeBoxed _ _ (ExtType et)) -> pure $ ExtTypeBoxed b t (ExtType $ et `mappend` "*")
+            Just (ExtTypeRaw (ExtType et)) -> pure $ ExtTypeBoxed b t (ExtType $ et `mappend` "*")
+            _ -> pure $ ExtTypeBoxed b t "HsPtr"
     f seen e@(ELit LitCons { litName = c, litArgs = [ta] }) | c == tc_Complex = do
         case f seen ta of
-            Just (ExtTypeRaw (ExtType et)) -> return $ ExtTypeRaw (ExtType $ "_Complex " `mappend` et)
+            Just (ExtTypeRaw (ExtType et)) -> pure $ ExtTypeRaw (ExtType $ "_Complex " `mappend` et)
             _ -> fail "invalid _Complex type"
     f seen e@(ELit LitCons { litName = c }) | Just (conCTYPE -> Just et) <- getConstructor c dataTable = do
-        return $ case g seen e of
+        pure $ case g seen e of
             Just (ExtTypeBoxed b t _) -> ExtTypeBoxed b t et
             Just ExtTypeVoid -> ExtTypeVoid
             _ -> ExtTypeRaw et
     f seen e = g seen e
     -- if we are a raw type, we can be foreigned
     g _ (ELit LitCons { litName = c })
-        | Just et <- Map.lookup c rawExtTypeMap = return (ExtTypeRaw et)
+        | Just et <- Map.lookup c rawExtTypeMap = pure (ExtTypeRaw et)
     -- if we are a single constructor data type with a single foreignable unboxed
     -- slot, we are foreiginable
     g _ (ELit LitCons { litName = c, litAliasFor = Nothing })
         | Just Constructor { conChildren = DataNormal [cn] }  <- getConstructor c dataTable,
           Just Constructor { conOrigSlots = [SlotNormal st] } <- getConstructor cn dataTable,
-          Just (ExtTypeRaw et) <- lookupExtTypeInfo dataTable st = return $ ExtTypeBoxed cn st et
+          Just (ExtTypeRaw et) <- lookupExtTypeInfo dataTable st = pure $ ExtTypeBoxed cn st et
     g seen e@(ELit LitCons { litName = n }) | Just e' <- followAlias dataTable e,
         n `Set.notMember` seen = f (Set.insert n seen) e'
     g _ e = fail $ "lookupExtTypeInfo: " ++ show (oe,e)
 
 expandAlias :: Monad m => E -> m E
-expandAlias (ELit LitCons { litAliasFor = Just af, litArgs = as }) = return (foldl eAp af as)
+expandAlias (ELit LitCons { litAliasFor = Just af, litArgs = as }) = pure (foldl eAp af as)
 expandAlias  _ = fail "expandAlias: not alias"
 
 followAlias :: Monad m => DataTable -> E -> m E
-followAlias _ (ELit LitCons { litAliasFor = Just af, litArgs = as }) = return (foldl eAp af as)
+followAlias _ (ELit LitCons { litAliasFor = Just af, litArgs = as }) = pure (foldl eAp af as)
 followAlias _  _ = fail "followAlias: not alias"
 
 followAliases :: DataTable -> E -> E
@@ -532,7 +532,7 @@ create_integralCast conv c1 t1 c2 t2 e t = eCase e [Alt (litCons { litName = c1,
     cc = if n1 == n2 then ELit (litCons { litName = c2, litArgs = [EVar tvra], litType = t }) else
         eStrictLet  tvrb (EPrim (Op (Op.ConvOp conv n1') n2') [EVar tvra] t2)  (ELit (litCons { litName = c2, litArgs = [EVar tvrb], litType = t }))
 
-nameToOpTy n = do RawType <- return $ nameType n; Op.readTy (show n)
+nameToOpTy n = do RawType <- pure $ nameType n; Op.readTy (show n)
 
 create_uintegralCast_toInt c1 t1 e = create_integralCast Op.U2U c1 t1 dc_Int tIntzh e tInt
 
@@ -543,14 +543,14 @@ updateLit dataTable lc@LitCons { litName = n } =  lc { litAliasFor = af } where
     af = do
         Constructor { conChildren = DataNormal [x], conOrigSlots = cs } <- getConstructor n dataTable
         Constructor { conChildren = DataAlias ErasedAlias, conOrigSlots = [SlotNormal sl] } <- getConstructor x dataTable
-        return (foldr ELam sl [ tVr i s | s <- getSlots cs | i <- anonymousIds])
+        pure (foldr ELam sl [ tVr i s | s <- getSlots cs | i <- anonymousIds])
 
 removeNewtypes :: DataTable -> E -> E
 removeNewtypes dataTable e = runIdentity (f e) where
-    f ec@ECase {} = emapEGH f f return ec { eCaseAlts = map g (eCaseAlts ec) } where
+    f ec@ECase {} = emapEGH f f pure ec { eCaseAlts = map g (eCaseAlts ec) } where
         g (Alt l e) = Alt (gl $ updateLit dataTable l) e
-    f (ELit l) = emapEGH f f return (ELit (gl $ updateLit dataTable l))
-    f e = emapEGH f f return e
+    f (ELit l) = emapEGH f f pure (ELit (gl $ updateLit dataTable l))
+    f e = emapEGH f f pure e
     gl lc@LitCons { litAliasFor = Just e }  = lc { litAliasFor = Just $ removeNewtypes dataTable e }
     gl l = l
 
@@ -588,7 +588,7 @@ toDataTable km cm ds currentDataTable = newDataTable  where
         dt decl (if nn `elem` newtypeLoopBreakers then DataAlias RecursiveAlias else DataAlias ErasedAlias) cs
     f decl@HsDataDecl { hsDeclDeclType = DeclTypeKind } = dkind decl
     f decl@HsDataDecl { hsDeclCons = cs } = dt decl DataNone cs
-    f _ = return ()
+    f _ = pure ()
     dt decl DataNone cs@(_:_:_) | all null (map hsConDeclArgs cs) = do
         let virtualCons'@(fc:_) = map (makeData DataNone typeInfo) cs
             typeInfo@(theType,_,_) = makeType decl (hsDeclCTYPE decl)
@@ -610,7 +610,7 @@ toDataTable km cm ds currentDataTable = newDataTable  where
         tell (Seq.singleton dataCons)
         tell (Seq.singleton rtypeCons)
         tell $ Seq.singleton theType { conChildren = DataNormal [consName], conVirtual = virt }
-        return ()
+        pure ()
 
     dt decl alias cs = do
         let dataCons = map (makeData alias typeInfo) cs
@@ -678,14 +678,14 @@ toDataTable km cm ds currentDataTable = newDataTable  where
             f (i:is) (False:bs) (e:es) = Left (e { tvrIdent = i, tvrType = subst (tvrType e) },False):f is bs es
             f (i:j:is) (True:bs) (e:es) = maybe  (Left (e { tvrIdent = i, tvrType = subst (tvrType e) },True):f is bs es) id $ g e (tvrType e) where
                 g e te = do
-                    ELit LitCons { litName = n } <- return $ followAliases fullDataTable te
+                    ELit LitCons { litName = n } <- pure $ followAliases fullDataTable te
                     Constructor { conChildren = DataNormal [dc] } <- getConstructor n fullDataTable
                     con <- getConstructor dc fullDataTable
                     case (conChildren con,slotTypes fullDataTable dc te) of
                         (DataAlias ErasedAlias,[nt]) -> g e nt
                         (_,[st]) -> do
                             let nv = tvr { tvrIdent = j, tvrType = st }
-                            return $ Right (e { tvrIdent = i, tvrType = subst (tvrType e)},dc,[nv]):f is bs es
+                            pure $ Right (e { tvrIdent = i, tvrType = subst (tvrType e)},dc,[nv]):f is bs es
                         _ -> fail "not unboxable"
             f _ [] [] = []
             f _ _ _ = error "DataConstructors.tslots"
@@ -750,17 +750,17 @@ deconstructionExpression dataTable name typ@(ELit LitCons { litName = pn, litArg
     Just pc = getConstructor (conInhabits mc) dataTable
     sub = substMap $ fromDistinctAscList [ (i,sl) | sl <- xs | i <- anonymousIds ]
     ans = case conVirtual mc of
-        Just _ -> return $ let ELit LitCons {  litArgs = [ELit (LitInt n t)] } = conExpr mc in Alt (LitInt n t) e
+        Just _ -> pure $ let ELit LitCons {  litArgs = [ELit (LitInt n t)] } = conExpr mc in Alt (LitInt n t) e
         Nothing -> do
             let f vs (SlotExistential t:ss) rs ls = f vs ss (t:rs) ls
                 f (v:vs) (SlotNormal _:ss) rs ls = f vs ss (v:rs) ls
                 f (v:vs) (SlotUnpacked e n es:ss) rs ls = do
                     let g t = do
                             s <- newUniq
-                            return $ tVr (anonymous s) t
+                            pure $ tVr (anonymous s) t
                     as <- mapM g (map sub es)
                     f vs ss (reverse as ++ rs) ((v,ELit litCons { litName = n, litArgs = map EVar as, litType = sub e }):ls)
-                f [] [] rs ls = return $ Alt (litCons { litName = name, litArgs = reverse rs, litType = typ }) (eLetRec ls e)
+                f [] [] rs ls = pure $ Alt (litCons { litName = name, litArgs = reverse rs, litType = typ }) (eLetRec ls e)
                 f _ _ _ _ = error "DataConstructors.deconstructuonExpression.f"
             f vs (conOrigSlots mc) [] []
 deconstructionExpression wdt n ty vs e | Just fa <- followAlias wdt ty  = deconstructionExpression wdt n fa vs e
@@ -842,46 +842,46 @@ onlyChild dt n = isJust ans where
     ans = do
         c <- getConstructor n dt
         case conChildren c of
-            DataNormal [_] -> return ()
+            DataNormal [_] -> pure ()
             _ -> do
                 c <- getConstructor (conInhabits c) dt
                 case conChildren c of
-                    DataNormal [_] -> return ()
+                    DataNormal [_] -> pure ()
                     _ -> fail "not cpr"
 
 pprintTypeOfCons :: (Monad m,DocLike a) => DataTable -> Name -> m a
 pprintTypeOfCons dataTable name = do
     c <- getConstructor name dataTable
-    return $ pprintTypeAsHs (conType c)
+    pure $ pprintTypeAsHs (conType c)
 
 pprintTypeAsHs :: DocLike a => E -> a
 pprintTypeAsHs e = unparse $ runVarName (f e) where
-    f e | e == eStar = return $ atom $ text "*"
-        | e == eHash = return $ atom $ text "#"
+    f e | e == eStar = pure $ atom $ text "*"
+        | e == eHash = pure $ atom $ text "#"
     f (EPi (TVr { tvrIdent = eid, tvrType = t1 }) t2) | eid == emptyId = do
         t1 <- f t1
         t2 <- f t2
-        return $ t1 `arr` t2
+        pure $ t1 `arr` t2
     f (ELit LitCons { litName = n, litArgs = as }) | (a:as') <- reverse as = f $ EAp (ELit litCons { litName = n, litArgs = reverse as' }) a
-    f (ELit LitCons { litName = n, litArgs = [] }) = return $ atom $ text $ show n
+    f (ELit LitCons { litName = n, litArgs = [] }) = pure $ atom $ text $ show n
     f (EAp a b) = do
         a <- f a
         b <- f b
-        return $ a `app` b
+        pure $ a `app` b
     f (EVar v) = do
         vo <- newLookupName ['a' .. ] () (tvrIdent v)
-        return $ atom $ char vo
+        pure $ atom $ char vo
     f v | (e,ts@(_:_)) <- fromPi v = do
         ts' <- mapM (newLookupName ['a'..] () . tvrIdent) ts
         r <- f e
-        return $ fixitize (N,-3) $ pop (text "forall" <+> hsep (map char ts') <+> text ". ")  (atomize r)
+        pure $ fixitize (N,-3) $ pop (text "forall" <+> hsep (map char ts') <+> text ". ")  (atomize r)
     f e = error $ "printTypeAsHs: " ++ show e
     arr = bop (R,0) (space D.<> text "->" D.<> space)
     app = bop (L,100) (text " ")
 
 class Monad m => DataTableMonad m where
     getDataTable :: m DataTable
-    getDataTable = return mempty
+    getDataTable = pure mempty
 
 instance DataTableMonad Identity
 

@@ -341,14 +341,14 @@ displayIO :: Handle -> SimpleDoc -> IO ()
 displayIO handle simpleDoc
     = display simpleDoc
     where
-      display SEmpty        = return ()
+      display SEmpty        = pure ()
       display (SChar c x)   = do{ hPutChar handle c; display x}
       display (SText l s x) = do{ hPutStr handle s; display x}
       display (SLine i x)   = do{ hPutStr handle ('\n':indentation i); display x}
 
 displayM :: Monad m => (String -> m ()) -> SimpleDoc -> m ()
 displayM putStr simpleDoc = display simpleDoc where
-      display SEmpty        = return ()
+      display SEmpty        = pure ()
       display (SChar c x)   = do{ putStr [c]; display x}
       display (SText l s x) = do{ putStr s; display x}
       display (SLine i x)   = do{ putStr ('\n':indentation i); display x}

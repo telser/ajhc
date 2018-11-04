@@ -53,7 +53,7 @@ createEval shared  te ts'
         Case n2 (mapExp (:>>= sup p1 sts) (f ot):map f whnfts)
     | SwitchingUpdate sts <- shared = let
             lf = createEval NoUpdate te ts
---            cu t | tagIsTag t && tagIsWHNF t = return ans where
+--            cu t | tagIsTag t && tagIsWHNF t = pure ans where
 --                (ts,_) = runIdentity $ findArgsType te t
 --                vs = [ Var v ty |  v <- [V 4 .. ] | ty <- ts]
 --                ans = NodeC t vs :-> Update p1 (NodeC t vs)
@@ -62,7 +62,7 @@ createEval shared  te ts'
     where
     ts = sortUnder toPackedString ts'
     sup p sts = let
-            cu t | tagIsTag t && tagIsWHNF t = return ans where
+            cu t | tagIsTag t && tagIsWHNF t = pure ans where
                 (ts,_) = runIdentity $ findArgsType te t
                 vs = [ Var v ty |  v <- [V 4 .. ] | ty <- ts]
                 ans = NodeC t vs :-> Update p1 (NodeC t vs)
@@ -138,17 +138,17 @@ createEvalApply grin = do
     appMap <- newOnceMap
     let f (ls :-> exp) = do
             exp' <- g exp
-            return $ ls :-> exp'
+            pure $ ls :-> exp'
         g (BaseOp (Apply ty) [fun]) = do
             fn' <- runOnceMap appMap (TyUnit,ty) $ do
                 u <- newUniq
-                return (toAtom $ "bapply_" ++ show u)
-            return (App fn' [fun] ty)
+                pure (toAtom $ "bapply_" ++ show u)
+            pure (App fn' [fun] ty)
         g (BaseOp (Apply ty) [fun,arg]) = do
             fn' <- runOnceMap appMap (getType arg,ty) $ do
                 u <- newUniq
-                return (toAtom $ "bapply_" ++ show u)
-            return (App fn' [fun,arg] ty)
+                pure (toAtom $ "bapply_" ++ show u)
+            pure (App fn' [fun,arg] ty)
         g x = mapExpExp g x
     funcs <- mapMsnd f (grinFuncs grin)
     as <- onceMapToList appMap
@@ -159,4 +159,4 @@ createEvalApply grin = do
             appBody = createApply targ tret (grinTypeEnv grin) tags
         TyEnv tyEnv = grinTypeEnv grin
         appTyEnv = fromList ntyenv
-    return $ setGrinFunctions (apps ++ funcs) grin { grinTypeEnv = TyEnv (tyEnv `union` appTyEnv) }
+    pure $ setGrinFunctions (apps ++ funcs) grin { grinTypeEnv = TyEnv (tyEnv `union` appTyEnv) }

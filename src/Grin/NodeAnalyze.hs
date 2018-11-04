@@ -109,12 +109,12 @@ nodeAnalyze grin' = do
             doFunc (toAtom "@initcafs",[] :-> initCafs grin)
         grin = renameUniqueGrin grin'
         docaf (v,tt) | True = tell $ Right top `equals` Left (V (Vr v) TyINode)
-                     | otherwise = return ()
+                     | otherwise = pure ()
     --putStrLn "----------------------------"
     --print cs
     --putStrLn "----------------------------"
     --putStrLn "-- NodeAnalyze"
-    (rm,res) <- solve (const (return ())) cs
+    (rm,res) <- solve (const (pure ())) cs
     --(rm,res) <- solve putStrLn cs
     --putStrLn "----------------------------"
     --mapM_ (\ (x,y) -> putStrLn $ show x ++ " -> " ++ show y) (Map.toList rm)
@@ -123,7 +123,7 @@ nodeAnalyze grin' = do
     --putStrLn "----------------------------"
     let cmap = Map.map (fromJust . flip Map.lookup res) rm
     (grin',stats) <- Stats.runStatT $ tickleM (fixupfs cmap (grinTypeEnv grin)) grin
-    return $ transformFuncs (fixupFuncs (grinSuspFunctions grin) (grinPartFunctions grin) cmap) grin' { grinStats = stats `mappend` grinStats grin' }
+    pure $ transformFuncs (fixupFuncs (grinSuspFunctions grin) (grinPartFunctions grin) cmap) grin' { grinStats = stats `mappend` grinStats grin' }
 
 data Todo = Todo !Bool [V] | TodoNothing
 
@@ -144,7 +144,7 @@ doFunc (name,arg :-> body) = ans where
     -- restrict values of TyNode type to be in WHNF
     dVar v TyNode = do
         tell $ Left v `islte` Right (N WHNF Top)
-    dVar _ _ = return ()
+    dVar _ _ = pure ()
     -- set concrete values for vars based on their type only
     -- should only be used in patterns
     zVar s v TyNode = tell $ cAnnotate ("zVar - tynode " ++ s) $ Left (vr v TyNode) `equals` Right (N WHNF Top)
@@ -158,7 +158,7 @@ doFunc (name,arg :-> body) = ans where
         f (x :>>= vs@(_:_:_) :-> rest) = do
             vs' <- forM vs $ \ (Var v vt) -> do
                 dVar (vr v vt) vt
-                return $ vr v vt
+                pure $ vr v vt
             gn (if all (== VIgnore) vs' then TodoNothing else Todo True vs') x
             f rest
         f (x :>>= v :-> rest) = do
@@ -187,7 +187,7 @@ doFunc (name,arg :-> body) = ans where
             case ret of
                 Todo b vs | length res /= length vs -> error "lengths don't match!"
                 Todo b vs -> forM_ (zip vs res) $ \ (v,r) -> tell (isfn ret v r)
-                _ -> return ()
+                _ -> pure ()
         f (_ :>>= _) = error $ "Grin.NodeAnalyze: :>>="
         f (Case v as)
             | Todo _ n <- ret = mapM_ (fl (Todo False n)) as
@@ -217,7 +217,7 @@ doFunc (name,arg :-> body) = ans where
             ww <- convertVal w
             tell $ ww `islte` Right (N WHNF Top)
             dres [ww]
-        f Error {} = return ()
+        f Error {} = pure ()
         f Prim { expArgs = as, expType = ty } = mapM_ convertVal as >> dunno ty
         f Alloc { expValue = v } | getType v == TyNode = do
             v' <- convertVal v
@@ -239,25 +239,25 @@ doFunc (name,arg :-> body) = ans where
         f exp = error $ "NodeAnalyze.f: " ++ show exp
 
     convertVal (Const n@(NodeC _ _)) = convertVal n
-    convertVal (Const _) = return $ Right (N WHNF Top)
+    convertVal (Const _) = pure $ Right (N WHNF Top)
     convertVal (NodeC t vs) = case tagUnfunction t of
         Nothing -> do
             mapM_ convertVal vs
-            return $ Right (N WHNF (Only $ Set.singleton t))
+            pure $ Right (N WHNF (Only $ Set.singleton t))
         Just (n,fn) -> do
             vs' <- mapM convertVal vs
             forMn_ (zip vs vs') $ \ ((vt,v),i) -> do
                 tell $ v `islte` Left (fa fn i (getType vt))
             forM_ [0 .. n - 1 ] $ \i -> do
                tell $ Right top `islte` Left (fa fn (length vs + i) TyINode)
-            return $ Right (N (if n == 0 then Lazy else WHNF) (Only $ Set.singleton t))
-    convertVal (Var v t) = return $ Left (vr v t)
-    convertVal v | isGood v = return $ Right (N Lazy Top)
-    convertVal Lit {} = return $ Left VIgnore
-    convertVal ValPrim {} = return $ Left VIgnore
-    convertVal Index {} = return $ Left VIgnore
-    convertVal Item {} = return $ Left VIgnore
-    convertVal ValUnknown {} = return $ Left VIgnore
+            pure $ Right (N (if n == 0 then Lazy else WHNF) (Only $ Set.singleton t))
+    convertVal (Var v t) = pure $ Left (vr v t)
+    convertVal v | isGood v = pure $ Right (N Lazy Top)
+    convertVal Lit {} = pure $ Left VIgnore
+    convertVal ValPrim {} = pure $ Left VIgnore
+    convertVal Index {} = pure $ Left VIgnore
+    convertVal Item {} = pure $ Left VIgnore
+    convertVal ValUnknown {} = pure $ Left VIgnore
     convertVal v = error $ "convertVal " ++ show v
 
 bottom = N WHNF (Only (Set.empty))
@@ -348,7 +348,7 @@ transformFuncs fn grin = grin'' where
             g (t,WhatSubs nty _ _) = [nty]
 
     j Let { expDefs = ds, expBody = e } =  grinLet [ updateFuncDefProps d { funcDefBody = snd $ fs (funcDefName d, funcDefBody d) } | d <- ds ] (j e)
-    j e = runIdentity $ mapExpExp (return . j) e
+    j e = runIdentity $ mapExpExp (pure . j) e
 
 fixupFuncs sfuncs pfuncs cmap  = ans where
     ans a as jrs | a `Set.member` pfuncs = (Nothing,Nothing)
@@ -367,9 +367,9 @@ fixupFuncs sfuncs pfuncs cmap  = ans where
 fixupfs cmap tyEnv l = tickleM f (l::Lam) where
     lupVar (Var v t) =  case Map.lookup (vr v t) cmap of
         _ | v < v0 -> fail "nocafyet"
-        Just (ResultJust _ lb) -> return lb
-        Just ResultBounded { resultLB = Just lb } -> return lb
-        Just ResultBounded { resultLB = Nothing } -> return bottom
+        Just (ResultJust _ lb) -> pure lb
+        Just ResultBounded { resultLB = Just lb } -> pure lb
+        Just ResultBounded { resultLB = Nothing } -> pure bottom
         _ -> fail "lupVar"
     lupVar _ = fail "lupVar2"
     pstuff x arg n@(N w t) = liftIO $ when verbose (printf "-- %s %s %s\n" x (show arg) (show n))
@@ -377,8 +377,8 @@ fixupfs cmap tyEnv l = tickleM f (l::Lam) where
         N WHNF _ -> do
             pstuff "eval" arg n
             Stats.mtick (toAtom "Optimize.NodeAnalyze.eval-promote")
-            return (BaseOp Promote [arg])
-        _ -> return a
+            pure (BaseOp Promote [arg])
+        _ -> pure a
     f a@(BaseOp (Apply ty) (papp:args)) | Just nn <- lupVar papp = case nn of
         N WHNF tset | Only set <- tset, [sv] <- Set.toList set, TagPApp n fn <- tagInfo sv, Just (ts,_) <- findArgsType tyEnv sv -> do
             pstuff "apply" papp nn
@@ -387,22 +387,22 @@ fixupfs cmap tyEnv l = tickleM f (l::Lam) where
                     Stats.mtick (toAtom "Optimize.NodeAnalyze.apply-inline")
                     let va = Var v1 (getType arg)
                         vars = zipWith Var [ v2 .. ] ts
-                    return $ Return [arg,papp] :>>= [va,NodeC sv vars] :-> App fn (vars ++ [va]) ty
+                    pure $ Return [arg,papp] :>>= [va,NodeC sv vars] :-> App fn (vars ++ [va]) ty
                 (1,[]) -> do
                     Stats.mtick (toAtom "Optimize.NodeAnalyze.apply-inline")
                     let vars = zipWith Var [ v2 .. ] ts
-                    return $ Return [papp] :>>= [NodeC sv vars] :-> App fn vars ty
+                    pure $ Return [papp] :>>= [NodeC sv vars] :-> App fn vars ty
                 (pn,[arg]) -> do
                     Stats.mtick (toAtom "Optimize.NodeAnalyze.apply-inline")
                     let va = Var v1 (getType arg)
                         vars = zipWith Var [ v2 .. ] ts
-                    return $ Return [arg,papp] :>>= [va,NodeC sv vars] :-> dstore (NodeC (partialTag fn (pn - 1)) (vars ++ [va]))
+                    pure $ Return [arg,papp] :>>= [va,NodeC sv vars] :-> dstore (NodeC (partialTag fn (pn - 1)) (vars ++ [va]))
                 (pn,[]) -> do
                     Stats.mtick (toAtom "Optimize.NodeAnalyze.apply-inline")
                     let vars = zipWith Var [ v2 .. ] ts
-                    return $ Return [papp] :>>= [NodeC sv vars] :-> dstore (NodeC (partialTag fn (pn - 1)) vars)
-                _ -> return a
-        _ -> return a
+                    pure $ Return [papp] :>>= [NodeC sv vars] :-> dstore (NodeC (partialTag fn (pn - 1)) vars)
+                _ -> pure a
+        _ -> pure a
     f e = mapExpExp f e
 
 dstore x = BaseOp (StoreNode True) [x]
@@ -411,34 +411,34 @@ renameUniqueGrin :: Grin -> Grin
 renameUniqueGrin grin = res where
     (res,()) = evalRWS (execUniqT 1 ans) ( mempty :: Map.Map Atom Atom) (fromList [ x | (x,_) <- grinFuncs grin ] :: Set.Set Atom)
     ans = do tickleM f grin
-    f (l :-> b) = g b >>= return . (l :->)
+    f (l :-> b) = g b >>= pure . (l :->)
     g a@App  { expFunction = fn } = do
         m <- lift ask
         case mlookup fn m of
-            Just fn' -> return a { expFunction = fn' }
-            _ -> return a
+            Just fn' -> pure a { expFunction = fn' }
+            _ -> pure a
     g a@Call { expValue = Item fn t } = do
         m <- lift ask
         case mlookup fn m of
-            Just fn' -> return a { expValue = Item fn' t }
-            _ -> return a
+            Just fn' -> pure a { expValue = Item fn' t }
+            _ -> pure a
     g (e@Let { expDefs = defs }) = do
         (defs',rs) <- liftM unzip $ flip mapM defs $ \d -> do
             (nn,rs) <- newName (funcDefName d)
-            return (d { funcDefName = nn },rs)
+            pure (d { funcDefName = nn },rs)
         local (fromList rs `mappend`) $  mapExpExp g e { expDefs = defs' }
     g b = mapExpExp g b
     newName a = do
         m <- lift get
         case member a m of
-            False -> do lift $ modify (insert a); return (a,(a,a))
+            False -> do lift $ modify (insert a); pure (a,(a,a))
             True -> do
             let cfname = do
                 uniq <- newUniq
                 let fname = toAtom $ show a  ++ "-" ++ show uniq
-                if fname `member` (m :: Set.Set Atom) then cfname else return fname
+                if fname `member` (m :: Set.Set Atom) then cfname else pure fname
             nn <- cfname
             lift $ modify (insert nn)
-            return (nn,(a,nn))
+            pure (nn,(a,nn))
 
 bool x y b = if b then x else y

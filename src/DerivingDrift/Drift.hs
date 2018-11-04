@@ -25,12 +25,12 @@ driftDerive' :: Monad m => HsDecl -> m String
 driftDerive' HsDataDecl { hsDeclName = name, hsDeclArgs = args, hsDeclCons = condecls, hsDeclDerives = derives } = do
         let d = unrenameTyVars $ toData  name args condecls derives
             isEnum = length condecls > 1 && null (concatMap hsConDeclArgs condecls)
-        xs <- return $  map (derive isEnum d) derives
-        return $ unlines xs
+        xs <- pure $  map (derive isEnum d) derives
+        pure $ unlines xs
 --driftDerive' (HsNewTypeDecl sloc cntxt name args condecl derives) = do
 --        let d =  unrenameTyVars $ toData  name args [condecl] derives
---        xs <- return $ map (derive False d) derives
---        return $ unlines xs
+--        xs <- pure $ map (derive False d) derives
+--        pure $ unlines xs
 
 driftDerive' _ = fail "Nothing to derive"
 

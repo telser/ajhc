@@ -44,7 +44,7 @@ readDigest digest = do
     w2 <- peekWord32 digest 4
     w3 <- peekWord32 digest 8
     w4 <- peekWord32 digest 12
-    return $ Hash w1 w2 w3 w4
+    pure $ Hash w1 w2 w3 w4
 
 peekWord32 ptr off = do
     b1 <- peekByteOff ptr off       :: IO Word8
@@ -52,11 +52,11 @@ peekWord32 ptr off = do
     b3 <- peekByteOff ptr (off + 2) :: IO Word8
     b4 <- peekByteOff ptr (off + 3) :: IO Word8
     let fi = fromIntegral :: Word8 -> Word32
-    return (fi b1 `shiftL` 24 .|. fi b2 `shiftL` 16 .|. fi b3 `shiftL` 8 .|. fi b4)
+    pure (fi b1 `shiftL` 24 .|. fi b2 `shiftL` 16 .|. fi b3 `shiftL` 8 .|. fi b4)
 
 instance Binary Hash where
     put (Hash a b c d) = put a >> put b >> put c >> put d
-    get = return Hash `ap` get `ap` get `ap` get `ap` get
+    get = pure Hash `ap` get `ap` get `ap` get `ap` get
 
 md5file :: FilePath -> IO Hash
 md5file fp = md5lazy `fmap` LBS.readFile fp

@@ -8,7 +8,7 @@ parseOptions :: String -> [(String,String)]
 parseOptions s = case readP_to_S parse s of
     os -> head $ sortBy (\x y -> compare (negate $ length x) (negate $ length y)) [ x | (x,_) <- os ]
 
-token x = x >>= \r -> spaces >> return r
+token x = x >>= \r -> spaces >> pure r
 
 parse = do
     spaces
@@ -24,23 +24,23 @@ pragma = do
     nn <- munch1 (\c -> isAlpha c || c == '_')
     skipSpaces
     body <- manyTill get (string "#-}")
-    return $ (nn,body)
+    pure $ (nn,body)
 
 comment = plone +++ pline +++ line +++ block where
     line = do
         string "--"
         manyTill get (char '\n')
-        return ()
+        pure ()
     pline = do
         string "# "
         manyTill get (char '\n')
-        return ()
+        pure ()
     plone = do
         string "#line "
         manyTill get (char '\n')
-        return ()
+        pure ()
     block = do
         string "{-"
         satisfy (/= '#')
         manyTill get (string "-}")
-        return ()
+        pure ()

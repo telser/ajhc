@@ -73,9 +73,9 @@ compileToGrin prog = do
     x <- transformGrin devolveTransform x
     --x <- opt "After Devolve Optimization" x
     x <- transformGrin simplifyParms x
-    x <- return $ twiddleGrin x
- --   x <- return $ normalizeGrin x
---    x <- return $ twiddleGrin x
+    x <- pure $ twiddleGrin x
+ --   x <- pure $ normalizeGrin x
+--    x <- pure $ twiddleGrin x
     x <- storeAnalyze x
     dumpFinalGrin x
     compileGrinToC x
@@ -92,9 +92,9 @@ compileGrinToC grin = do
         fn = outputName ++ lup "executable_extension"
         lup k = maybe "" id $ Map.lookup k (optInis options)
     cf <- case (optOutName options,optStop options) of
-            (Just fn,StopC) -> return fn
-            _ | dump FD.C -> return (fn ++ "_code.c")
-              | otherwise -> fileInTempDir ("main_code.c") (\_ -> return ())
+            (Just fn,StopC) -> pure fn
+            _ | dump FD.C -> pure (fn ++ "_code.c")
+              | otherwise -> fileInTempDir ("main_code.c") (\_ -> pure ())
     (argstring,sversion) <- getArgString
     (cc,args) <- fetchCompilerFlags
     forM_ [("rts/constants.h",constants_h),
@@ -128,7 +128,7 @@ compileGrinToC grin = do
                   "rts/jhc_rts.c", "lib/lib_cbits.c", "rts/gc_jgc.c",
                   "rts/stableptr.c", "rts/conc.c"]
     tdir <- getTempDir
-    ds <- iocatch (getDirectoryContents (tdir FP.</> "cbits")) (\_ -> return [])
+    ds <- iocatch (getDirectoryContents (tdir FP.</> "cbits")) (\_ -> pure [])
     let extraCFiles = map noEscapePath $ map (tdir FP.</>) cFiles ++ ["-I" ++ tdir ++ "/cbits", "-I" ++ tdir ] ++ [ tdir FP.</> "cbits" FP.</> fn | fn@(reverse -> 'c':'.':_) <- ds ]
     let comm = shellQuote $ [cc] ++ extraCFiles ++ [cf, "-o", fn] ++ args ++ rls
         globalvar n c = LBS.fromString $ "char " ++ n ++ "[] = \"" ++ c ++ "\";"
@@ -141,7 +141,7 @@ compileGrinToC grin = do
     putProgressLn ("Running: " ++ comm)
     r <- systemCompat comm
     when (r /= ExitSuccess) $ fail "C code did not compile."
-    return ()
+    pure ()
 
 grinParms = transformParms {
     transformDumpProgress = verbose,
@@ -163,7 +163,7 @@ nodeAnalyzeParms = grinParms {
             g <- deadCode stats (grinEntryPointNames grin) grin
             g <- nodeAnalyze g
             st <- Stats.readStat stats
-            return g { grinStats = grinStats grin `mappend` st }
+            pure g { grinStats = grinStats grin `mappend` st }
 
 pushParms = grinParms {
     transformCategory = "Push",
@@ -171,7 +171,7 @@ pushParms = grinParms {
     } where
         pushGrin grin = do
             nf   <- mapMsnd (grinPush undefined) (grinFuncs grin)
-            return $ setGrinFunctions nf grin
+            pure $ setGrinFunctions nf grin
 
 deadCodeParms = grinParms {
     transformCategory = "DeadCode",
@@ -181,4 +181,4 @@ deadCodeParms = grinParms {
             stats <- Stats.new
             g <- deadCode stats (grinEntryPointNames grin) grin
             st <- Stats.readStat stats
-            return g { grinStats = grinStats grin `mappend` st }
+            pure g { grinStats = grinStats grin `mappend` st }

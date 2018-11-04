@@ -48,12 +48,12 @@ getDyn = do
     case Map.lookup ps binTable of
         Just (Binable (_ :: a)) -> do
             x <- get :: Get a
-            return $ newEntry x
+            pure $ newEntry x
         Nothing -> fail $ "getDyn: don't know how to read something of type: " ++ show ps
 
 instance Binary Properties where
     put (Properties (EBS props)) = put (fromIntegral $ BS.toWord props :: Word32)
-    get = (get :: Get Word32) >>= return . Properties . EBS . BS.fromWord . fromIntegral
+    get = (get :: Get Word32) >>= pure . Properties . EBS . BS.fromWord . fromIntegral
 
 instance Binary Info where
     put nfo = putInfo nfo
@@ -63,7 +63,7 @@ putInfo :: Info.Info.Info -> Put
 putInfo (Info ds) = do
     let ds' = concatMap (\d -> do
             case Prelude.lookup (entryType d) revBinTable of
-              Just (ps,x)  -> return (ps,entryThing d,x)
+              Just (ps,x)  -> pure (ps,entryThing d,x)
               Nothing -> fail "key not found"
           ) ds
     putWord8 (fromIntegral $ length ds')
@@ -73,4 +73,4 @@ getInfo :: Get Info.Info.Info
 getInfo = do
     n <- getWord8
     xs <- replicateM (fromIntegral n) getDyn
-    return (Info xs)
+    pure (Info xs)

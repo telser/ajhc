@@ -76,36 +76,36 @@ instance ToVal Val where
     toVal x = x
 
 instance FromVal Int where
-    fromVal (NodeC _ [Lit i _]) | Just x <- toIntegral i = return x
+    fromVal (NodeC _ [Lit i _]) | Just x <- toIntegral i = pure x
     fromVal n = fail $ "Val is not Int: " ++ show n
-    fromUnVal (Lit i _) | Just x <- toIntegral i = return x
+    fromUnVal (Lit i _) | Just x <- toIntegral i = pure x
     fromUnVal n = fail $ "Val is not UnInt: " ++ show n
 instance FromVal Char where
-    fromVal (NodeC _ [Lit i _]) | Just x <- toIntegral i, x >= ord minBound && x <= ord maxBound = return (chr x)
+    fromVal (NodeC _ [Lit i _]) | Just x <- toIntegral i, x >= ord minBound && x <= ord maxBound = pure (chr x)
     fromVal n = fail $ "Val is not Char: " ++ show n
-    fromUnVal (Lit i _) | Just x <- toIntegral i, x >= ord minBound && x <= ord maxBound = return (chr x)
+    fromUnVal (Lit i _) | Just x <- toIntegral i, x >= ord minBound && x <= ord maxBound = pure (chr x)
     fromUnVal n = fail $ "Val is not UnChar: " ++ show n
 
 instance FromVal a => FromVal [a] where
-    fromVal (NodeC n [])  | n == nil = return []
+    fromVal (NodeC n [])  | n == nil = pure []
     fromVal (NodeC n [Const a,Const b]) | n == cons = do
         x <- fromVal a
         xs <- fromVal b
-        return (x:xs)
+        pure (x:xs)
     fromVal n = fail $ "Val is not [a]: " ++ show n
 
 instance FromVal Bool  where
     fromVal n
-        | n == toVal True = return True
-        | n == toVal False = return False
+        | n == toVal True = pure True
+        | n == toVal False = pure False
     fromVal n = fail $ "Val is not Bool: " ++ show n
 instance FromVal Val where
-    fromVal n = return n
+    fromVal n = pure n
 
-valToList (NodeC n []) | n == nil = return []
+valToList (NodeC n []) | n == nil = pure []
 valToList (NodeC n [a,Const b]) | n == cons = do
         xs <- valToList b
-        return (a:xs)
+        pure (a:xs)
 valToList n = fail $ "Val is not [a]: " ++ show n
 
 convertName n = toAtom (t':s) where

@@ -96,7 +96,7 @@ findFirstFile :: [FilePath] -> IO (LBS.ByteString,FilePath)
 findFirstFile [] = fail "findFirstFile: file not found"
 findFirstFile (x:xs) = flip iocatch (\e -> findFirstFile xs) $ do
     bs <- LBS.readFile x
-    return (bs,x)
+    pure (bs,x)
 
 data ModDone
     = ModNotFound
@@ -135,18 +135,18 @@ findHoFile done_ref fp mm sh = do
     done <- readIORef done_ref
     let honame = hoFile (hoCache done) fp mm sh
     writeIORef done_ref (done { validSources = Set.insert sh (validSources done) })
-    if sh `Set.member` validSources done || optIgnoreHo options then return (False,honame) else do
-    onErr (return (False,honame)) (readHoFile honame) $ \ (hoh,hidep,ho) ->
+    if sh `Set.member` validSources done || optIgnoreHo options then pure (False,honame) else do
+    onErr (pure (False,honame)) (readHoFile honame) $ \ (hoh,hidep,ho) ->
         case hohHash hoh `Map.lookup` hosEncountered done of
-            Just (fn,_,_,a) -> return (True,fn)
+            Just (fn,_,_,a) -> pure (True,fn)
             Nothing -> do
                 modifyIORef done_ref (knownSourceMap_u $ (`mappend` (hoIDeps hidep)))
                 modifyIORef done_ref (validSources_u $ Set.union (Set.fromList . map snd $ hoDepends hidep))
                 modifyIORef done_ref (hosEncountered_u $ Map.insert (hohHash hoh) (honame,hoh,hidep,ho))
-                return (True,honame)
+                pure (True,honame)
 
 onErr :: IO a -> IO b -> (b -> IO a) -> IO a
-onErr err good cont = join $ iocatch (good >>= return . cont) (\_ -> return err)
+onErr err good cont = join $ iocatch (good >>= pure . cont) (\_ -> pure err)
 
 fetchSource :: Opt -> IORef Done -> [FilePath] -> Maybe (Module,SrcLoc) -> IO Module
 fetchSource _ _ [] _ = fail "No files to load"
@@ -155,21 +155,21 @@ fetchSource modOpt done_ref fs mm = do
             Nothing -> fail $ "Could not load file: " ++ show fs
             Just (m,sloc) -> do
                 warn sloc (MissingModule m) $ printf "Module '%s' not found." (show m)
-                modifyIORef done_ref (modEncountered_u $ Map.insert m ModNotFound) >> return m
+                modifyIORef done_ref (modEncountered_u $ Map.insert m ModNotFound) >> pure m
     onErr killMod (findFirstFile fs) $ \ (lbs,fn) -> do
     let hash = MD5.md5lazy $ (LBSU.fromString version) `mappend` lbs
     (foundho,mho) <- findHoFile done_ref fn (fmap fst mm) hash
     done <- readIORef done_ref
     (mod,m,ds) <- case mlookup hash (knownSourceMap done) of
-        Just (m,ds) -> return (Left lbs,m,ds)
+        Just (m,ds) -> pure (Left lbs,m,ds)
         Nothing -> do
             (hmod,_) <- parseHsSource modOpt  fn lbs
             let m = hsModuleName hmod
                 ds = hsModuleRequires hmod
             writeIORef done_ref (knownSourceMap_u (Map.insert hash (m,ds)) done)
             case optAnnotate options of
-                Just _ -> return (Left lbs,m,ds)
-                _ -> return (Right hmod,m,ds)
+                Just _ -> pure (Left lbs,m,ds)
+                _ -> pure (Right hmod,m,ds)
     case mm of
         Just (m',_) | m /= m' -> do
             putErrLn $ "Skipping file" <+> fn <+> "because its module declaration of" <+> show m <+> "does not equal the expected" <+> show m'
@@ -185,15 +185,15 @@ fetchSource modOpt done_ref fs mm = do
                 then printf "%-23s [%s] <%s>" (show m) fn' mho'
                 else printf "%-23s [%s]" (show m) fn'
             mapM_ (resolveDeps modOpt done_ref) ds
-            return m
+            pure m
 
 resolveDeps :: Opt -> IORef Done -> (Module,SrcLoc) -> IO ()
 resolveDeps modOpt done_ref (m,sloc) = do
     done <- readIORef done_ref
     case m `mlookup` modEncountered done of
         Just (ModLibrary False _ lib) | not ("jhc-prim-" `isPrefixOf` libName lib) -> putErrDie $ printf  "ERROR: Attempt to import module '%s' which is a member of the library '%s'.\nPerhaps you need to add '-p%s' to the command line?" (show m) (libName lib) (libName lib)
-        Just _ -> return ()
-        Nothing -> fetchSource modOpt done_ref (map fst $ searchPaths modOpt (show m)) (Just (m,sloc)) >> return ()
+        Just _ -> pure ()
+        Nothing -> fetchSource modOpt done_ref (map fst $ searchPaths modOpt (show m)) (Just (m,sloc)) >> pure ()
 
 type LibInfo = (Map.Map Module ModuleGroup, Map.Map ModuleGroup [ModuleGroup], Set.Set Module,Map.Map ModuleGroup HoBuild,Map.Map ModuleGroup HoTcInfo)
 
@@ -215,7 +215,7 @@ instance MapKey MD5.Hash where
     showMapKey = show
 
 dumpDeps targets memap cug = case optDeps options of
-    Nothing -> return ()
+    Nothing -> pure ()
     Just fp -> do
         let (sfps,sdps,ls) = collectDeps memap cug
         let yaml = Map.fromList [
@@ -315,13 +315,13 @@ toCompUnitGraph done roots = do
     hom_ref <- newIORef (Map.map ((,) False) $ hosEncountered done)
     ms <- forM gr' $ \ns -> do
         r <- newIORef (Left ns)
-        return (Map.fromList [ (m,r) | ((m,_),_) <- ns ])
+        pure (Map.fromList [ (m,r) | ((m,_),_) <- ns ])
     let mods = Map.unions ms
         lmods m = fromMaybe (error $ "modsLookup: " ++ show m) (Map.lookup m mods)
     let f m = do
             rr <- readIORef (lmods m)
             case rr of
-                Right hh -> return hh
+                Right hh -> pure hh
                 Left ns -> g ns
 
         g ms@(((m,Left _),_):_) = do
@@ -332,7 +332,7 @@ toCompUnitGraph done roots = do
                 let mhash = MD5.md5String (concatMap (show . fst) ms ++ show deps')
                 writeIORef (lmods m) (Right mhash)
                 modifyIORef cug_ref ((mhash,(deps',CompSources $ map fs amods)):)
-                return mhash
+                pure mhash
         g [((mg,Right lib),ds)] = do
                 let Just hob = Map.lookup mg $ libBuildMap lib
                     Just hot = Map.lookup mg $ libTcMap lib
@@ -341,7 +341,7 @@ toCompUnitGraph done roots = do
                 deps <- snub `fmap` mapM f ds
                 writeIORef (lmods mg) (Right myHash)
                 modifyIORef cug_ref ((myHash,(deps,CompLibrary ho lib)):)
-                return myHash
+                pure myHash
         g _ = error "Build.toCompUnitGraph: bad."
         pm :: [HoHash] -> IO HoHash -> IO HoHash
         pm [] els = els
@@ -350,10 +350,10 @@ toCompUnitGraph done roots = do
             ll <- Map.lookup h `fmap` readIORef hom_ref
             case ll of
                 Nothing -> fail "Don't know anything about this hash"
-                Just (True,_) -> return h
+                Just (True,_) -> pure h
                 Just (False,af@(fp,hoh,idep,ho)) -> do
                     fp <- shortenPath fp
-                    isGood <- iocatch ( mapM_ cdep (hoDepends idep) >> mapM_ hvalid (hoModDepends idep) >> return True) (\_ -> return False)
+                    isGood <- iocatch ( mapM_ cdep (hoDepends idep) >> mapM_ hvalid (hoModDepends idep) >> pure True) (\_ -> pure False)
                     let isStale = not . null $ map (show . fst) (hoDepends idep) `intersect` optStale options
                         libsGood = all (\ (p,h) -> fmap (libHash) (Map.lookup p (loadedLibraries done)) == Just h) (hohLibDeps hoh)
                         noGood forced = do
@@ -366,12 +366,12 @@ toCompUnitGraph done roots = do
                             hs <- mapM f (hoModuleGroupNeeds idep)
                             modifyIORef cug_ref ((h,(hs ++ hoModDepends idep,CompHo hoh idep ho)):)
                             modifyIORef hom_ref (Map.insert h (True,af))
-                            return h
+                            pure h
                         (True,_) -> noGood " (forced)"
                         (_,False) -> noGood ""
-        cdep (_,hash) | hash == MD5.emptyHash = return ()
+        cdep (_,hash) | hash == MD5.emptyHash = pure ()
         cdep (mod,hash) = case Map.lookup mod sources of
-            Just hash' | hash == hash' -> return ()
+            Just hash' | hash == hash' -> pure ()
             _ -> fail "Can't verify module up to date"
         fs m = case Map.lookup m (modEncountered done) of
             Just (Found sc) -> sc
@@ -384,7 +384,7 @@ toCompUnitGraph done roots = do
     when (dump FD.SccModules) $ do
         putErrLn "ComponentsDeps:"
         mapM_ (putErrLn . show) [ (snd $ snd v, map (snd . snd) vs) | (v,vs) <- G.fromGraph gr']
-    return (rhash,[ (h,([ d | (d,_) <- ns ],cu)) | ((h,(_,cu)),ns) <- G.fromGraph gr' ])
+    pure (rhash,[ (h,([ d | (d,_) <- ns ],cu)) | ((h,(_,cu)),ns) <- G.fromGraph gr' ])
 
 parseFiles
     :: Opt                                                  -- ^ Options to use when parsing files
@@ -409,7 +409,7 @@ parseFiles options targets elibs need ifunc func = do
     performGC
     putProgressLn "Compiling..."
     cho <- compileCompNode ifunc func ksm cnode
-    return (cnode,cho)
+    pure (cnode,cho)
 
 -- this takes a list of modules or files to load, and produces a compunit graph
 loadModules
@@ -423,7 +423,7 @@ loadModules modOpt targets libs sloc need = do
     theCache <- findHoCache
     case theCache of
         Just s -> putProgressLn $ printf "Using Ho Cache: '%s'" s
-        Nothing -> return ()
+        Nothing -> pure ()
     done_ref <- newIORef Done {
         hoCache = theCache,
         knownSourceMap = Map.empty,
@@ -461,7 +461,7 @@ loadModules modOpt targets libs sloc need = do
     let needed = (ms1 ++ lefts need)
     (chash,cug) <- toCompUnitGraph done needed
     dumpDeps targets (modEncountered done) cug
-    return (Map.filterWithKey (\k _ -> k `Set.member` validSources done) (knownSourceMap done),chash,cug)
+    pure (Map.filterWithKey (\k _ -> k `Set.member` validSources done) (knownSourceMap done),chash,cug)
 
 -- turn the list of CompUnits into a true mutable graph.
 processCug :: CompUnitGraph -> HoHash -> IO CompNode
@@ -470,10 +470,10 @@ processCug cug root = mdo
         lup x = maybe (error $ "processCug: " ++ show x) id (Map.lookup x mmap)
         f (h,(ds,cu)) = do
             cur <- newIORef (CompLinkUnit cu)
-            return $ (h,CompNode h (map lup ds) cur)
+            pure $ (h,CompNode h (map lup ds) cur)
     xs <- mapM f cug
-    Just x <- return $ Map.lookup root mmap
-    return $ x
+    Just x <- pure $ Map.lookup root mmap
+    pure $ x
 
 mkPhonyCompUnit :: [Module] -> CompUnitGraph -> (HoHash,CompUnitGraph)
 mkPhonyCompUnit need cs = (fhash,(fhash,(fdeps,CompDummy)):cs) where
@@ -481,7 +481,7 @@ mkPhonyCompUnit need cs = (fhash,(fhash,(fdeps,CompDummy)):cs) where
         fdeps = [ h | (h,(_,cu)) <- cs, not . null $ providesModules cu `intersect` need ]
 
 printModProgress :: Int -> Int -> IO Int -> [HsModule] -> IO ()
-printModProgress _ _ _ [] = return ()
+printModProgress _ _ _ [] = pure ()
 printModProgress _ _ tickProgress ms | not progress = mapM_ (const tickProgress) ms
 printModProgress fmtLen maxModules tickProgress ms = f "[" ms where
     f bl ms = do
@@ -496,15 +496,15 @@ countNodes cn = do
     seen <- newIORef Set.empty
     let h (CompNode hh deps ref) = do
             s <- readIORef seen
-            if hh `Set.member` s then return Set.empty else do
+            if hh `Set.member` s then pure Set.empty else do
                 writeIORef seen (Set.insert hh s)
                 ds <- mapM h deps
                 cm <- readIORef ref >>= g
-                return (Set.unions (cm:ds))
+                pure (Set.unions (cm:ds))
         g cn = case cn of
-            CompLinkUnit cu      -> return $ f cu
-            CompTcCollected _ cu -> return $ f cu
-            CompCollected _ cu   -> return $ f cu
+            CompLinkUnit cu      -> pure $ f cu
+            CompTcCollected _ cu -> pure $ f cu
+            CompCollected _ cu   -> pure $ f cu
             CompLinkLib _ _      -> error "Build.countNodes: bad."
         f cu = case cu of
             CompTCed (_,_,_,ss) -> Set.fromList ss
@@ -517,27 +517,27 @@ typeCheckGraph modOpt cn = do
     cur <- newMVar (1::Int)
     maxModules <- Set.size `fmap` countNodes cn
     let f (CompNode hh deps ref) = readIORef ref >>= \cn -> case cn of
-            CompTcCollected ctc _ -> return ctc
+            CompTcCollected ctc _ -> pure ctc
             CompLinkUnit lu -> do
                 deps' <- randomPermuteIO deps
                 ctc <- mconcat `fmap` mapM f deps'
                 case lu of
                     CompDummy -> do
                         writeIORef ref (CompTcCollected ctc CompDummy)
-                        return ctc
+                        pure ctc
                     CompHo hoh idep ho  -> do
                         let ctc' = hoTcInfo ho `mappend` ctc
                         writeIORef ref (CompTcCollected ctc' lu)
-                        return ctc'
+                        pure ctc'
                     CompLibrary ho _libr  -> do
                         let ctc' = hoTcInfo ho `mappend` ctc
                         writeIORef ref (CompTcCollected ctc' lu)
-                        return ctc'
+                        pure ctc'
                     CompSources sc -> do
                         let mods = sort $ map (sourceModName . sourceInfo) sc
                         modules <- forM sc $ \x -> case x of
                             SourceParsed { sourceInfo = si, sourceModule = sm } ->
-                                return (sourceHash si, sm, error "SourceParsed in AnnotateSource")
+                                pure (sourceHash si, sm, error "SourceParsed in AnnotateSource")
                             SourceRaw { sourceInfo = si, sourceLBS = lbs } -> do
                                 (mod,lbs') <- parseHsSource modOpt (sourceFP si) lbs
                                 case optAnnotate modOpt of
@@ -549,20 +549,20 @@ typeCheckGraph modOpt cn = do
                                                 "Siblings: " ++ show mods,
                                                 "-}"]
                                         LBS.writeFile (fp ++ "/" ++ show (hsModuleName mod) ++ ".hs") (ann `LBS.append` lbs')
-                                    _ -> return ()
-                                return (sourceHash si,mod,lbs')
+                                    _ -> pure ()
+                                pure (sourceHash si,mod,lbs')
                         showProgress (map snd3 modules)
                         (htc,tidata) <- doModules ctc (map snd3 modules)
                         let ctc' = htc `mappend` ctc
                         writeIORef ref (CompTcCollected ctc' (CompTCed ((htc,tidata,[ (x,y) | (x,y,_) <- modules],map (sourceHoName . sourceInfo) sc))))
-                        return ctc'
+                        pure ctc'
                     _ -> error "Build.typeCheckGraph: bad1."
             _ -> error "Build.typeCheckGraph: bad2."
         showProgress ms = printModProgress fmtLen maxModules tickProgress ms
         fmtLen = ceiling (logBase 10 (fromIntegral maxModules+1) :: Double) :: Int
-        tickProgress = modifyMVar cur $ \val -> return (val+1,val)
+        tickProgress = modifyMVar cur $ \val -> pure (val+1,val)
     f cn
-    return ()
+    pure ()
 
 compileCompNode :: (CollectedHo -> Ho -> IO CollectedHo)                 -- ^ Process initial ho loaded from file
                 -> (CollectedHo -> Ho -> TiData  -> IO (CollectedHo,Ho)) -- ^ Process set of mutually recursive modules to produce final Ho
@@ -572,13 +572,13 @@ compileCompNode :: (CollectedHo -> Ho -> IO CollectedHo)                 -- ^ Pr
 compileCompNode ifunc func ksm cn = do
     cur <- newMVar (1::Int)
     ksm_r <- newIORef ksm
-    let tickProgress = modifyMVar cur $ \val -> return (val+1,val)
+    let tickProgress = modifyMVar cur $ \val -> pure (val+1,val)
     maxModules <- Set.size `fmap` countNodes cn
     let showProgress ms = printModProgress fmtLen maxModules tickProgress ms
         fmtLen = ceiling (logBase 10 (fromIntegral maxModules+1) :: Double) :: Int
     let f (CompNode hh deps ref) = readIORef ref >>= g where
             g cn = case cn of
-                CompCollected ch _ -> return ch
+                CompCollected ch _ -> pure ch
                 CompTcCollected _ cl -> h cl
                 CompLinkUnit cu -> h cu
                 _ -> error "Build.compileCompNode: bad."
@@ -589,25 +589,25 @@ compileCompNode ifunc func ksm cn = do
                 case cu of
                     CompDummy -> do
                         writeIORef ref (CompCollected cho CompDummy)
-                        return cho
+                        pure cho
                     (CompHo hoh idep ho) -> do
                         cho <- choLibDeps_u (Map.union $ Map.fromList (hohLibDeps hoh)) `fmap` ifunc cho ho
                         writeIORef ref (CompCollected cho cu)
-                        return cho
+                        pure cho
                     (CompLibrary ho Library { libHoHeader = hoh }) -> do
                         cho <- ifunc cho ho
                         let Right (ln,_) = hohName hoh
                             lh = hohHash hoh
                             cho' = (choLibDeps_u (Map.insert ln lh) cho)
                         writeIORef ref (CompCollected cho' cu)
-                        return cho'
+                        pure cho'
                     CompTCed ((htc,tidata,modules,shns))  -> do
                         (hdep,ldep) <- fmap mconcat . forM deps $ \ (CompNode h _ ref) -> do
                             cl <- readIORef ref
                             case compLinkCompUnit cl of
-                                CompLibrary ho _ -> return ([],[hoModuleGroup ho])
-                                CompDummy {} -> return ([],[])
-                                _ -> return ([h],[])
+                                CompLibrary ho _ -> pure ([],[hoModuleGroup ho])
+                                CompDummy {} -> pure ([],[])
+                                _ -> pure ([h],[])
                         showProgress (snds modules)
                         let (mgName:_) = sort $ map (hsModuleName . snd) modules
                         (cho',newHo) <- func cho mempty { hoModuleGroup = mgName, hoTcInfo = htc } tidata
@@ -628,7 +628,7 @@ compileCompNode ifunc func ksm cn = do
                                     }
                         recordHoFile (mapHoBodies eraseE newHo) idep shns hoh
                         writeIORef ref (CompCollected cho' (CompHo hoh idep newHo))
-                        return cho'
+                        pure cho'
                     CompSources _ -> error "sources still exist!?"
     f cn
 
@@ -644,12 +644,12 @@ searchPaths modOpt m = ans where
 
 mapHoBodies  :: (E -> E) -> Ho -> Ho
 mapHoBodies sm ho = ho { hoBuild = g (hoBuild ho) } where
-    g ho = ho { hoEs = map f (hoEs ho) , hoRules =  runIdentity (E.Rules.mapBodies (return . sm) (hoRules ho)) }
+    g ho = ho { hoEs = map f (hoEs ho) , hoRules =  runIdentity (E.Rules.mapBodies (pure . sm) (hoRules ho)) }
     f (t,e) = (t,sm e)
 
 eraseE :: E -> E
 eraseE e = runIdentity $ f e where
-    f (EVar tv) = return $ EVar  tvr { tvrIdent = tvrIdent tv }
+    f (EVar tv) = pure $ EVar  tvr { tvrIdent = tvrIdent tv }
     f e = emapE f e
 
 ---------------------------------
@@ -676,7 +676,7 @@ buildLibrary ifunc func = ans where
             f (CompNode hs cd ref) = do
                 cl <- readIORef ref
                 case cl of
-                    CompLinkLib l _ -> return l
+                    CompLinkLib l _ -> pure l
                     CompCollected _ y -> g hs cd ref y
                     _ -> error "Build.buildLibrary: bad1."
             g hh deps ref cn = do
@@ -696,7 +696,7 @@ buildLibrary ifunc func = ans where
                         _ -> error "Build.buildLibrary: bad2."
                     res = (mg,mconcat (snds deps) `mappend` mll)
                 writeIORef ref (CompLinkLib res cn)
-                return res
+                pure res
           in f rnode
         let unknownMods = Set.toList $ Set.filter (`Set.notMember` allMods) prvds
         mapM_ ((putStrLn . ("*** Module depended on in library that is not in export list: " ++)) . show) unknownMods
@@ -726,7 +726,7 @@ buildLibrary ifunc func = ans where
         when verbose2 $ do
             mapM_ print (Map.toList dlist)
             mapM_ print (Map.toList dsing)
-        let jfield x = maybe (fail $ "createLibrary: description lacks required field " ++ show x) return $ Map.lookup x dsing
+        let jfield x = maybe (fail $ "createLibrary: description lacks required field " ++ show x) pure $ Map.lookup x dsing
             mfield x = maybe [] id $ Map.lookup x dlist
             --mfield x = maybe [] (words . map (\c -> if c == ',' then ' ' else c)) $ Map.lookup x dlist
         name <- jfield "name"
@@ -747,11 +747,11 @@ buildLibrary ifunc func = ans where
         let hmods = map toModule $ snub $ mfield "hidden-modules"
             emods = map toModule $ snub $ mfield "exposed-modules"
             sources = map (FP.takeDirectory fp FP.</>) $ snub $ mfield "c-sources" ++ mfield "include-sources"
-        return (Map.toList dsing,name,vers,hmods,emods,modOpts,sources)
+        pure (Map.toList dsing,name,vers,hmods,emods,modOpts,sources)
 
 fetchExtraFile fp = do
     c <- BS.readFile fp
-    return ExtraFile { extraFileName = packString (FP.takeFileName fp),
+    pure ExtraFile { extraFileName = packString (FP.takeFileName fp),
                        extraFileData = c }
 
 ------------------------------------

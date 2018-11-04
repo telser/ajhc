@@ -124,7 +124,7 @@ instance Binary ClassHierarchy where
     get = do
         m1 <- getMap
         m2 <- getMap
-        return (CH m1 m2)
+        pure (CH m1 m2)
     put (CH m1 m2) = do
         putMap m1
         putMap m2
@@ -157,7 +157,7 @@ qualifyMethod :: [HsAsst] -> HsDecl -> HsDecl
 qualifyMethod ~[HsAsst c [n]] ~(HsTypeSig sloc names (HsQualType oc t))
     = HsTypeSig sloc names (HsQualType (HsAsst c [n']:oc) t) where
         Just n' = (something (mkQ mzero f)) t
-        f (HsTyVar n') | hsNameToOrig n' == hsNameToOrig n = return n'
+        f (HsTyVar n') | hsNameToOrig n' == hsNameToOrig n = pure n'
         f _ = mzero
 
 printClassSummary :: ClassHierarchy -> IO ()
@@ -216,16 +216,16 @@ addInstanceToHierarchy inst@Inst { instHead = cntxt :=> ~(IsIn className _) } (C
 -- errors here.
 hsInstDeclToInst :: Monad m => KindEnv -> HsDecl -> m [Inst]
 hsInstDeclToInst kt (HsInstDecl sloc qType decls)
-    = return [emptyInstance { instSrcLoc = sloc, instDerived = False,
+    = pure [emptyInstance { instSrcLoc = sloc, instDerived = False,
         instHead = cntxt :=> IsIn className convertedArgType, instAssocs = assocs }]
    where
    (cntxt, (className, [convertedArgType])) = chToClassHead kt qType
    assocs = [ (tc,as,bs,s) | (tc,as,bs,~(Just s)) <- createInstAssocs kt decls ]
 hsInstDeclToInst kt (HsDeclDeriving sloc qType)
-        = return [emptyInstance { instSrcLoc = sloc, instDerived = True,
+        = pure [emptyInstance { instSrcLoc = sloc, instDerived = True,
         instHead = cntxt :=> IsIn className convertedArgType }]
    where (cntxt, (className, [convertedArgType])) = chToClassHead kt qType
-hsInstDeclToInst _ _ = return []
+hsInstDeclToInst _ _ = pure []
 
 vtrace s v | False && verbose = trace s v
 vtrace s v | otherwise = v
@@ -291,12 +291,12 @@ methodToTopDecls kt preds crecord qt (methodName, methodDecls) = do
     let (cntxt,(className,[argType])) = chToClassHead kt qt
         newMethodName = instanceName methodName (getTypeHead argType)
     sigFromClass <- case [ s | (n, s) <- classAssumps crecord, n == methodName] of
-            [x] -> return x
+            [x] -> pure x
             _ -> fail $ "sigFromClass: " ++ (pprint className <+> pprint (classAssumps crecord))
                                           ++ " " ++ show  methodName
     let instantiatedSig = newMethodSig' kt methodName (preds ++ cntxt) sigFromClass argType
         renamedMethodDecls = renameOneDecl newMethodName methodDecls
-    return (renamedMethodDecls,(newMethodName, instantiatedSig))
+    pure (renamedMethodDecls,(newMethodName, instantiatedSig))
 
 defaultMethodToTopDecls :: KindEnv -> [Assump] -> HsClassHead -> (Name, HsDecl) -> (HsDecl,Assump)
 defaultMethodToTopDecls kt methodSigs HsClassHead { .. } (methodName, methodDecls)
@@ -403,7 +403,7 @@ scatterInstancesOf cr = map extract (classClasses cr)
 classHierarchyFromRecords rs =
     CH (Map.fromList [ (className x,x)| x <- rs ]) mempty
 
-fromHsTyVar (HsTyVar v) = return v
+fromHsTyVar (HsTyVar v) = pure v
 fromHsTyVar (HsTyExpKind (Located _ t) _) = fromHsTyVar t
 fromHsTyVar _ = fail "fromHsTyVar"
 
@@ -416,7 +416,7 @@ makeClassHierarchy (CH ch _is) kt ds = mconcat `liftM` mapM f ds where
                 newClassContext = [HsAsst className args]
                 className = hsClassHead chead
                 args = [ a | ~(Just a) <- map fromHsTyVar (hsClassHeadArgs chead) ]
-            return $ classHierarchyFromRecords [ClassRecord {
+            pure $ classHierarchyFromRecords [ClassRecord {
                 classArgs,
                 classAssocs,
                 classAlias = Nothing,
@@ -440,23 +440,23 @@ makeClassHierarchy (CH ch _is) kt ds = mconcat `liftM` mapM f ds where
 --                               }]
 
     f decl@(HsInstDecl {}) = hsInstDeclToInst kt decl >>= \insts -> do
-        return $ foldl (flip addInstanceToHierarchy) mempty insts
+        pure $ foldl (flip addInstanceToHierarchy) mempty insts
     f decl@(HsDeclDeriving {}) = hsInstDeclToInst kt decl >>= \insts -> do
-        return $ foldl (flip addInstanceToHierarchy) mempty insts
-    f _ = return mempty
+        pure $ foldl (flip addInstanceToHierarchy) mempty insts
+    f _ = pure mempty
 
 checkForDuplicateInstaces :: MonadWarn m
     => ClassHierarchy    -- ^ imported class hierarchy
     -> ClassHierarchy    -- ^ locally defined hierarchy
     -> m ClassHierarchy  -- ^ possibly simplified local hierarchy
-checkForDuplicateInstaces iCh (CH ch is) = mapM_ f (Map.toList is) >> return (CH ch is) where
+checkForDuplicateInstaces iCh (CH ch is) = mapM_ f (Map.toList is) >> pure (CH ch is) where
     f (className,is) = do
         let is' = findClassInsts iCh className ++ is
             sgu = sortGroupUnderFG fst snd [ ((cn,getTypeHead tt), i) |
                 i@Inst { instSrcLoc = sl, instHead = _ :=> IsIn cn tt } <- is' ]
         mapM_ g sgu
-    g (_,[_]) = return ()
-    g (_,sls) | all instDerived sls = return ()
+    g (_,[_]) = pure ()
+    g (_,sls) | all instDerived sls = pure ()
     g ((ch,th),sls) = warn (instSrcLoc $ head sls) DuplicateInstances $
         printf "instance (%s (%s ..)) defined multiple times: %s"
             (show ch) (show th) (show $ map instSrcLoc sls)

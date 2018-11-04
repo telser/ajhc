@@ -312,11 +312,11 @@ stop s = StopError s
 
 -- | Width of terminal.
 getColumns :: Int
-getColumns = read $ unsafePerformIO (getEnv "COLUMNS" `mplus` return "80")
+getColumns = read $ unsafePerformIO (getEnv "COLUMNS" `mplus` pure "80")
 
 postProcessFD :: Monad m => Opt -> m Opt
 postProcessFD o = case FlagDump.process (optDumpSet o) (optDump o ++ vv) of
-        (s,[]) -> return $ o { optDumpSet = s, optDump = [] }
+        (s,[]) -> pure $ o { optDumpSet = s, optDump = [] }
         (_,xs) -> fail ("Unrecognized dump flag passed to '-d': "
                         ++ unwords xs ++ "\nValid dump flags:\n\n" ++ FlagDump.helpMsg)
     where
@@ -326,7 +326,7 @@ postProcessFD o = case FlagDump.process (optDumpSet o) (optDump o ++ vv) of
 
 postProcessFO :: Monad m => Opt -> m Opt
 postProcessFO o = case FlagOpts.process (optFOptsSet o) (optFOpts o) of
-        (s,[]) -> return $ o { optFOptsSet = s, optFOpts = [] }
+        (s,[]) -> pure $ o { optFOptsSet = s, optFOpts = [] }
         (_,xs) -> fail ("Unrecognized flag passed to '-f': "
                         ++ unwords xs ++ "\nValid flags:\n\n" ++ FlagOpts.helpMsg)
 
@@ -334,7 +334,7 @@ getArguments = do
     x <- lookupEnv "AJHC_OPTS"
     let eas = maybe [] words x
     as <- getArgs
-    return (eas ++ as)
+    pure (eas ++ as)
 
 pfill ::
     Int            -- ^ maximum width
@@ -361,11 +361,11 @@ processOptions = do
     -- initial argument processing
     argv <- getArguments
     let (o,ns,rc) = getOpt Permute theoptions argv
-    o <- return (foldl (flip ($)) emptyOpt o)
+    o <- pure (foldl (flip ($)) emptyOpt o)
     when (rc /= []) $ putErrLn (concat rc ++ helpUsage) >> exitWith exitCodeUsage
     case optStop o of
         StopError s -> putErrLn "bad option passed to --stop should be one of parse, deps, typecheck, or c" >> exitWith exitCodeUsage
-        _ -> return ()
+        _ -> pure ()
     case optMode o of
         ShowHelp    -> doShowHelp
         ShowConfig  -> doShowConfig
@@ -374,7 +374,7 @@ processOptions = do
         PrintHscOptions -> do
             putStrLn $ "-I" ++ VC.datadir ++ "/" ++ VC.package ++ "-" ++ VC.shortVersion ++ "/include"
             exitSuccess
-        _ -> return ()
+        _ -> pure ()
     -- read targets.ini file
     cabalEtc <- getDataFileNameMaybe "etc"
     home <- fmap (++ "/") getHomeDirectory
@@ -385,20 +385,20 @@ processOptions = do
         iniFiles = [etcDir ++ "/targets.ini", etcDir ++ "/targets-local.ini", home ++ "/etc/ajhc/targets.ini", home ++ "/.ajhc/targets.ini"] ++ oTarget
     inis <- parseIniFiles (optVerbose o > 0) (BS.toString targets_ini) iniFiles (optArch o)
     -- process dump flags
-    o <- either putErrDie return $ postProcessFD o
+    o <- either putErrDie pure $ postProcessFD o
     when (FlagDump.Ini `S.member` optDumpSet o) $ flip mapM_ (M.toList inis) $ \(a,b) -> putStrLn (a ++ "=" ++ b)
     -- set flags based on ini options
     let o1 = case M.lookup "gc" inis of
             Just "jgc" -> optFOptsSet_u (S.insert FlagOpts.Jgc) o
             Just "boehm" -> optFOptsSet_u (S.insert FlagOpts.Boehm) o
             _ -> o
-    o2 <- either putErrDie return $ postProcessFO o1
+    o2 <- either putErrDie pure $ postProcessFO o1
     when (FlagDump.Ini `S.member` optDumpSet o) $ do
         putStrLn (show $ optDumpSet o)
         putStrLn (show $ optFOptsSet o)
     -- add autoloads based on ini options
     let autoloads = maybe [] (tokens (',' ==)) (M.lookup "autoload" inis)
-    return o2 { optArgs = ns, optInis = inis, optAutoLoads = autoloads }
+    pure o2 { optArgs = ns, optInis = inis, optAutoLoads = autoloads }
 
 doShowHelp = do
     putStrLn helpUsage
@@ -413,14 +413,14 @@ findHoCache :: IO (Maybe FilePath)
 findHoCache = do
     cd <- lookupEnv "AJHC_CACHE"
     case optHoCache options `mplus` cd of
-        Just s -> do return (Just s)
-        Just "-" -> do return Nothing
+        Just s -> do pure (Just s)
+        Just "-" -> do pure Nothing
         Nothing | isNothing (optHoDir options) -> do
             home <- fmap (++ "/") getHomeDirectory
             let cd = home ++ "/.ajhc/cache"
             createDirectoryIfMissing True cd
-            return (Just cd)
-        _  -> return Nothing
+            pure (Just cd)
+        _  -> pure Nothing
 
 configs :: Node
 configs = toNode [
@@ -491,23 +491,23 @@ initialIncludes :: [String]
 initialIncludes = unsafePerformIO $ do
     p <- lookupEnv "AJHC_PATH"
     let x = fromMaybe "" p
-    return (".":(tokens (== ':') x))
+    pure (".":(tokens (== ':') x))
 
 -- | Include directories taken from JHCLIBPATH enviroment variable.
 initialLibIncludes :: [String]
 initialLibIncludes = unsafePerformIO $ do
     ps <- lookupEnv "AJHC_LIBRARY_PATH"
-    h <- fmap return getHomeDirectory
+    h <- fmap pure getHomeDirectory
     let paths = h ++ ["/usr/local","/usr"]
         bases = ["/lib","/share"]
         vers = ["/ajhc-" ++ shortVersion, "/ajhc"]
     dat <- getDataFileNameMaybe "lib"
-    return $ nub $ maybe [] (tokens (':' ==))  ps ++ [ p ++ b ++ v | p <- paths, v <- vers, b <- bases ]
+    pure $ nub $ maybe [] (tokens (':' ==))  ps ++ [ p ++ b ++ v | p <- paths, v <- vers, b <- bases ]
                ++ [d ++ v | d <- [libdir,datadir], v <- vers] ++ [libraryInstall] ++ maybeToList dat
 
 class Monad m => OptionMonad m where
     getOptions :: m Opt
-    getOptions = return options
+    getOptions = pure options
 
 instance OptionMonad Identity
 
@@ -530,9 +530,9 @@ outputName = fromMaybe "hs.out" (optOutName options)
 flagOpt :: OptionMonad m => FlagOpts.Flag -> m Bool
 flagOpt flag = do
     opt <- getOptions
-    return (flag `S.member` optFOptsSet opt)
+    pure (flag `S.member` optFOptsSet opt)
 
 getArgString = do
     name <- getProgName
     args <- getArguments
-    return (simpleQuote (name:args),head $ lines versionString)
+    pure (simpleQuote (name:args),head $ lines versionString)

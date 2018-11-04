@@ -236,7 +236,7 @@ topLexer :: Lex a Token
 topLexer = do
     b <- pullCtxtFlag
     if b
-     then setBOL >> return VRightCurly -- the lex context state flags that we must do an empty {} - UGLY
+     then setBOL >> pure VRightCurly -- the lex context state flags that we must do an empty {} - UGLY
      else do
     bol <- checkBOL
     bol <- lexWhiteSpace bol
@@ -254,8 +254,8 @@ lexWhiteSpace bol = do
                 '"':_ -> do
                     discard 1
                     StringTok s <- lexString
-                    return (Just s)
-                _ -> return Nothing
+                    pure (Just s)
+                _ -> pure Nothing
             -- discard any "flags" at end of line ...
             lexWhile (`elem` " \r\t")
             lexWhile (isDigit)
@@ -264,7 +264,7 @@ lexWhiteSpace bol = do
     s <- getInput
     case s of
         '{':'-':'#':s
-            | pname `Map.member` pragmas -> return bol
+            | pname `Map.member` pragmas -> pure bol
             | otherwise -> do
                 when (pname `Set.notMember` pragmas_ignored) $
                     addWarn (UnknownPragma $ packString pname) $ "The pragma '" ++ pname ++ "' is unknown"
@@ -294,7 +294,7 @@ lexWhiteSpace bol = do
         c:_ | isSpace c -> do
             discard 1
             lexWhiteSpace bol
-        _ -> return bol
+        _ -> pure bol
 
 setFilePos :: Int -> Int -> Maybe String -> Lex a ()
 setFilePos line column ms = do
@@ -308,7 +308,7 @@ lexNestedComment :: Bool -> Lex a Bool
 lexNestedComment bol = do
 	s <- getInput
 	case s of
-	    '-':'}':_ -> discard 2 >> return bol
+	    '-':'}':_ -> discard 2 >> pure bol
 	    '{':'-':_ -> do
 		discard 2
 		bol <- lexNestedComment bol	-- rest of the subcomment
@@ -323,8 +323,8 @@ lexRawPragma w = rp [] where
     rp c = do
 	s <- getInput
 	case s of
-	    '#':'-':'}':_ | w == "OPTIONS"  -> discard 3 >> return (PragmaOptions (words $ reverse c))
-	--    '#':'-':'}':_ -> discard 3 >> return (PragmaRaw w (reverse c))
+	    '#':'-':'}':_ | w == "OPTIONS"  -> discard 3 >> pure (PragmaOptions (words $ reverse c))
+	--    '#':'-':'}':_ -> discard 3 >> pure (PragmaRaw w (reverse c))
 	    '#':'-':'}':_ -> fail "Unknown raw pragma"
 	    '\t':_    -> lexTab >> rp ('\t':c)
 	    '\n':_    -> lexNewline >> rp ('\n':c)
@@ -346,10 +346,10 @@ lexBOL = do
         	-- another close brace before the parser can pop it.
 		setBOL
 		popContextL "lexBOL"
-		return VRightCurly
+		pure VRightCurly
 	    EQ ->
                 -- trace "layout: inserting ';'\n" $
-		return SemiColon
+		pure SemiColon
 	    GT ->
 		lexToken
 
@@ -361,35 +361,35 @@ lexToken = do
             f (fo,k) = if fo `Set.member` optFOptsSet opt
                 then Just k else Nothing
     case s of
-        [] -> return EOF
+        [] -> pure EOF
         '(':'#':_ | utup -> do
             discard 2
-            return LeftUParen
+            pure LeftUParen
         '#':')':_ | utup -> do
             discard 2
-            return RightUParen
+            pure RightUParen
         '{':'-':'#':s' -> do
             discard 3
             lexWhile isSpace
             w <- lexWhile isIdent
             case normPragma w  of
-                Right t -> return t
+                Right t -> pure t
                 Left w' -> lexRawPragma w'
         '#':'-':'}':_ -> do
             discard 3
-            return PragmaEnd
+            pure PragmaEnd
 
 	'0':c:d:_ | toLower c == 'o' && isOctDigit d -> do
 			discard 2
 			n <- lexOctal
-			return (IntTok n)
+			pure (IntTok n)
 		  | toLower c == 'x' && isHexDigit d -> do
 			discard 2
 			n <- lexHexadecimal
                         rest <- getInput
                         case rest of
-                            '#':_ | uval -> discard 1 >> return (UIntTok n)
-                            _ -> return (IntTok n)
+                            '#':_ | uval -> discard 1 >> pure (UIntTok n)
+                            _ -> pure (IntTok n)
 
 	c:_ | isDigit c -> lexDecimalOrFloat
 
@@ -398,14 +398,14 @@ lexToken = do
 	    | isLower c || c == '_' || generalCategory c == OtherLetter -> do
 		(toUnqualName -> ident) <- lexWhile isIdent
 		case Map.lookup ident (opt_ids `Map.union` reserved_ids `Map.union` special_varids) of
-                        Just KW_Do -> setFlagDo >> return KW_Do
-			Just keyword -> return keyword
-			Nothing -> return $ VarId ident
+                        Just KW_Do -> setFlagDo >> pure KW_Do
+			Just keyword -> pure keyword
+			Nothing -> pure $ VarId ident
 
 	    | isSymbol c -> do
 		sym <- lexWhile isSymbol
                 let nsym = toUnqualName sym
-		return $ case Map.lookup nsym (opt_ids `Map.union` reserved_ops `Map.union` special_varops) of
+		pure $ case Map.lookup nsym (opt_ids `Map.union` reserved_ops `Map.union` special_varops) of
 			Just t  -> t
 			Nothing -> case c of
 			    ':' -> ConSym nsym
@@ -416,28 +416,28 @@ lexToken = do
 		case c of
 
 		    -- First the special symbols
-		    '(' ->  return LeftParen
-		    ')' ->  return RightParen
-		    ',' ->  return Comma
-		    ';' ->  return SemiColon
-		    '[' ->  return LeftSquare
-		    ']' ->  return RightSquare
-		    '`' ->  return BackQuote
+		    '(' ->  pure LeftParen
+		    ')' ->  pure RightParen
+		    ',' ->  pure Comma
+		    ';' ->  pure SemiColon
+		    '[' ->  pure LeftSquare
+		    ']' ->  pure RightSquare
+		    '`' ->  pure BackQuote
 		    '{' -> do
 			    pushContextL NoLayout
-			    return LeftCurly
+			    pure LeftCurly
 		    '}' -> do
 			    popContextL "lexToken"
-			    return RightCurly
+			    pure RightCurly
 
 		    '\'' -> do
 			    c2 <- lexChar
 			    matchChar '\'' "Improperly terminated character constant"
                             rest <- getInput
                             case rest of
-                                --'#':_ | uval -> discard 1 >> return (UIntTok $ fromIntegral $ ord c2)
-                                '#':_ | uval -> discard 1 >> return (UCharacter c2)
-                                _ -> return (Character c2)
+                                --'#':_ | uval -> discard 1 >> pure (UIntTok $ fromIntegral $ ord c2)
+                                '#':_ | uval -> discard 1 >> pure (UCharacter c2)
+                                _ -> pure (Character c2)
 
 		    '"' ->  lexString
 
@@ -451,7 +451,7 @@ lexDecimalOrFloat = do
             rest <- getInput
             case rest of
                 ('_':_) -> discard 1 >> ld (ds' ++ ds)
-                rest -> return (ds' ++ ds,rest)
+                rest -> pure (ds' ++ ds,rest)
     (ds,rest) <- ld []
     case rest of
         ('.':d:_) | isDigit d -> do
@@ -465,13 +465,13 @@ lexDecimalOrFloat = do
                         e:pm:d:_ | e `elem` "eE", (pm `elem` "+-" && isDigit d) || isDigit pm -> lexExponent
 --                        'e':_ -> lexExponent
  --                       'E':_ -> lexExponent
-                        _     -> return 0
-            return (FloatTok ((num%1) * 10^^(exponent - decimals)))
+                        _     -> pure 0
+            pure (FloatTok ((num%1) * 10^^(exponent - decimals)))
         e:_ | toLower e == 'e' -> do
             exponent <- lexExponent
-            return (FloatTok ((parseInteger 10 ds%1) * 10^^exponent))
-        '#':_ | uval -> discard 1 >> return (UIntTok (parseInteger 10 ds))
-        _ -> return (IntTok (parseInteger 10 ds))
+            pure (FloatTok ((parseInteger 10 ds%1) * 10^^exponent))
+        '#':_ | uval -> discard 1 >> pure (UIntTok (parseInteger 10 ds))
+        _ -> pure (IntTok (parseInteger 10 ds))
 
     where
 	lexExponent :: Lex a Integer
@@ -485,7 +485,7 @@ lexDecimalOrFloat = do
 		    '-':d:_ | isDigit d -> do
 			discard 1
 			n <- lexDecimal
-			return (negate n)
+			pure (negate n)
 		    d:_ | isDigit d -> lexDecimal
 		    _ -> fail "Float with missing exponent"
 
@@ -496,7 +496,7 @@ lexConIdOrQual qual = do
 		  | otherwise = QConId (toName UnknownType (qual,con))
 	    qual' | null qual = con
 		  | otherwise = qual ++ '.':con
-	just_a_conid <- alternative (return conid)
+	just_a_conid <- alternative (pure conid)
 	rest <- getInput
 	case rest of
 	  '.':c:_
@@ -506,7 +506,7 @@ lexConIdOrQual qual = do
 		case Map.lookup (toUnqualName ident) reserved_ids of
 		   -- cannot qualify a reserved word
 		   Just _  -> just_a_conid
-		   Nothing -> return (QVarId $ toName UnknownType (qual', ident))
+		   Nothing -> pure (QVarId $ toName UnknownType (qual', ident))
 
 	     | isUpper c -> do		-- qualified conid?
 		discard 1
@@ -519,18 +519,18 @@ lexConIdOrQual qual = do
 		case Map.lookup nsym reserved_ops of
 		    -- cannot qualify a reserved operator
 		    Just _  -> just_a_conid
-		    Nothing -> return $ case c of
+		    Nothing -> pure $ case c of
 			':' -> QConSym $ toName UnknownType (qual', sym)
 			_   -> QVarSym $ toName UnknownType (qual', sym)
 
-	  _ ->	return conid -- not a qualified thing
+	  _ ->	pure conid -- not a qualified thing
 
 lexChar :: Lex a Char
 lexChar = do
 	r <- getInput
 	case r of
 		'\\':_	-> lexEscape
-		c:_	-> discard 1 >> return c
+		c:_	-> discard 1 >> pure c
 		[]	-> fail "Incomplete character constant"
 
 lexString :: Lex a Token
@@ -552,10 +552,10 @@ lexString = do
 				loop (ce:s)
 		    '"':'#':_ | uval -> do
 				discard 2
-				return (UStringTok (reverse s))
+				pure (UStringTok (reverse s))
 		    '"':_ -> do
 				discard 1
-				return (StringTok (reverse s))
+				pure (StringTok (reverse s))
 		    c:_ -> do
 				discard 1
 				loop (c:s)
@@ -574,7 +574,7 @@ lexString = do
 		    c:_ | isSpace c -> do
 			discard 1
 			lexWhiteChars
-		    _ -> return ()
+		    _ -> pure ()
     loop ""
 
 lexEscape :: Lex a Char
@@ -585,54 +585,54 @@ lexEscape = do
 
 -- Production charesc from section B.2 (Note: \& is handled by caller)
 
-		'a':_		-> discard 1 >> return '\a'
-		'b':_		-> discard 1 >> return '\b'
-		'f':_		-> discard 1 >> return '\f'
-		'n':_		-> discard 1 >> return '\n'
-		'r':_		-> discard 1 >> return '\r'
-		't':_		-> discard 1 >> return '\t'
-		'v':_		-> discard 1 >> return '\v'
-		'\\':_		-> discard 1 >> return '\\'
-		'"':_		-> discard 1 >> return '\"'
-		'\'':_		-> discard 1 >> return '\''
+		'a':_		-> discard 1 >> pure '\a'
+		'b':_		-> discard 1 >> pure '\b'
+		'f':_		-> discard 1 >> pure '\f'
+		'n':_		-> discard 1 >> pure '\n'
+		'r':_		-> discard 1 >> pure '\r'
+		't':_		-> discard 1 >> pure '\t'
+		'v':_		-> discard 1 >> pure '\v'
+		'\\':_		-> discard 1 >> pure '\\'
+		'"':_		-> discard 1 >> pure '\"'
+		'\'':_		-> discard 1 >> pure '\''
 
 -- Production ascii from section B.2
 
 		'^':c:_		-> discard 2 >> cntrl c
-		'N':'U':'L':_	-> discard 3 >> return '\NUL'
-		'S':'O':'H':_	-> discard 3 >> return '\SOH'
-		'S':'T':'X':_	-> discard 3 >> return '\STX'
-		'E':'T':'X':_	-> discard 3 >> return '\ETX'
-		'E':'O':'T':_	-> discard 3 >> return '\EOT'
-		'E':'N':'Q':_	-> discard 3 >> return '\ENQ'
-		'A':'C':'K':_	-> discard 3 >> return '\ACK'
-		'B':'E':'L':_	-> discard 3 >> return '\BEL'
-		'B':'S':_	-> discard 2 >> return '\BS'
-		'H':'T':_	-> discard 2 >> return '\HT'
-		'L':'F':_	-> discard 2 >> return '\LF'
-		'V':'T':_	-> discard 2 >> return '\VT'
-		'F':'F':_	-> discard 2 >> return '\FF'
-		'C':'R':_	-> discard 2 >> return '\CR'
-		'S':'O':_	-> discard 2 >> return '\SO'
-		'S':'I':_	-> discard 2 >> return '\SI'
-		'D':'L':'E':_	-> discard 3 >> return '\DLE'
-		'D':'C':'1':_	-> discard 3 >> return '\DC1'
-		'D':'C':'2':_	-> discard 3 >> return '\DC2'
-		'D':'C':'3':_	-> discard 3 >> return '\DC3'
-		'D':'C':'4':_	-> discard 3 >> return '\DC4'
-		'N':'A':'K':_	-> discard 3 >> return '\NAK'
-		'S':'Y':'N':_	-> discard 3 >> return '\SYN'
-		'E':'T':'B':_	-> discard 3 >> return '\ETB'
-		'C':'A':'N':_	-> discard 3 >> return '\CAN'
-		'E':'M':_	-> discard 2 >> return '\EM'
-		'S':'U':'B':_	-> discard 3 >> return '\SUB'
-		'E':'S':'C':_	-> discard 3 >> return '\ESC'
-		'F':'S':_	-> discard 2 >> return '\FS'
-		'G':'S':_	-> discard 2 >> return '\GS'
-		'R':'S':_	-> discard 2 >> return '\RS'
-		'U':'S':_	-> discard 2 >> return '\US'
-		'S':'P':_	-> discard 2 >> return '\SP'
-		'D':'E':'L':_	-> discard 3 >> return '\DEL'
+		'N':'U':'L':_	-> discard 3 >> pure '\NUL'
+		'S':'O':'H':_	-> discard 3 >> pure '\SOH'
+		'S':'T':'X':_	-> discard 3 >> pure '\STX'
+		'E':'T':'X':_	-> discard 3 >> pure '\ETX'
+		'E':'O':'T':_	-> discard 3 >> pure '\EOT'
+		'E':'N':'Q':_	-> discard 3 >> pure '\ENQ'
+		'A':'C':'K':_	-> discard 3 >> pure '\ACK'
+		'B':'E':'L':_	-> discard 3 >> pure '\BEL'
+		'B':'S':_	-> discard 2 >> pure '\BS'
+		'H':'T':_	-> discard 2 >> pure '\HT'
+		'L':'F':_	-> discard 2 >> pure '\LF'
+		'V':'T':_	-> discard 2 >> pure '\VT'
+		'F':'F':_	-> discard 2 >> pure '\FF'
+		'C':'R':_	-> discard 2 >> pure '\CR'
+		'S':'O':_	-> discard 2 >> pure '\SO'
+		'S':'I':_	-> discard 2 >> pure '\SI'
+		'D':'L':'E':_	-> discard 3 >> pure '\DLE'
+		'D':'C':'1':_	-> discard 3 >> pure '\DC1'
+		'D':'C':'2':_	-> discard 3 >> pure '\DC2'
+		'D':'C':'3':_	-> discard 3 >> pure '\DC3'
+		'D':'C':'4':_	-> discard 3 >> pure '\DC4'
+		'N':'A':'K':_	-> discard 3 >> pure '\NAK'
+		'S':'Y':'N':_	-> discard 3 >> pure '\SYN'
+		'E':'T':'B':_	-> discard 3 >> pure '\ETB'
+		'C':'A':'N':_	-> discard 3 >> pure '\CAN'
+		'E':'M':_	-> discard 2 >> pure '\EM'
+		'S':'U':'B':_	-> discard 3 >> pure '\SUB'
+		'E':'S':'C':_	-> discard 3 >> pure '\ESC'
+		'F':'S':_	-> discard 2 >> pure '\FS'
+		'G':'S':_	-> discard 2 >> pure '\GS'
+		'R':'S':_	-> discard 2 >> pure '\RS'
+		'U':'S':_	-> discard 2 >> pure '\US'
+		'S':'P':_	-> discard 2 >> pure '\SP'
+		'D':'E':'L':_	-> discard 3 >> pure '\DEL'
 
 -- Escaped numbers
 
@@ -651,32 +651,32 @@ lexEscape = do
 		_		-> fail "Illegal escape sequence"
 
     where
-	checkChar n | n <= 0x01FFFF = return (chr (fromInteger n))
+	checkChar n | n <= 0x01FFFF = pure (chr (fromInteger n))
 	checkChar _		    = fail "Character constant out of range"
 
 -- Production cntrl from section B.2
 
 	cntrl :: Char -> Lex a Char
-	cntrl c | c >= '@' && c <= '_' = return (chr (ord c - ord '@'))
+	cntrl c | c >= '@' && c <= '_' = pure (chr (ord c - ord '@'))
 	cntrl _                        = fail "Illegal control character"
 
 -- assumes at least one octal digit
 lexOctal :: Lex a Integer
 lexOctal = do
 	ds <- lexWhile isOctDigit
-	return (parseInteger 8 ds)
+	pure (parseInteger 8 ds)
 
 -- assumes at least one hexadecimal digit
 lexHexadecimal :: Lex a Integer
 lexHexadecimal = do
 	ds <- lexWhile isHexDigit
-	return (parseInteger 16 ds)
+	pure (parseInteger 16 ds)
 
 -- assumes at least one decimal digit
 lexDecimal :: Lex a Integer
 lexDecimal = do
 	ds <- lexWhile isDigit
-	return (parseInteger 10 ds)
+	pure (parseInteger 10 ds)
 
 -- Stolen from Hugs's Prelude
 parseInteger :: Integer -> String -> Integer

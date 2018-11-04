@@ -191,4 +191,4 @@ data CallType = TailCall | StandardCall
 instance FreeVars Exp (Set.Set (CallType,Atom)) where
     freeVars (a :>>= _ :-> b) = freeVars b `Set.union` Set.map (\ (_ :: CallType,y) -> (StandardCall, y)) (freeVars a)
     freeVars (App a _ _) = Set.singleton (TailCall,a)
-    freeVars e = execWriter $ mapExpExp (\e -> tell (freeVars e) >> return e) e
+    freeVars e = execWriter $ mapExpExp (\e -> tell (freeVars e) >> pure e) e

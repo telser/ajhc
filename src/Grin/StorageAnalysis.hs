@@ -49,12 +49,12 @@ instance Show Vr where
 
 {-# NOINLINE storeAnalyze #-}
 storeAnalyze :: Grin -> IO Grin
-storeAnalyze grin | fopts FO.Jgc = return grin
+storeAnalyze grin | fopts FO.Jgc = pure grin
 storeAnalyze grin = do
     --dumpGrin "storeAnalyze1" grin
     let (grin',cs) = execUniq1 $ runWriterT (mapGrinFuncsM firstLam grin)
     --dumpGrin "storeAnalyze2" grin'
-    (rm,res) <- solve (const $ return ()) cs
+    (rm,res) <- solve (const $ pure ()) cs
  --   (rm,res) <- solve putStrLn cs
  --   putStrLn "----------------------------"
  --   mapM_ (\ (x,y) -> putStrLn $ show x ++ " -> " ++ show y) (Map.toList rm)
@@ -71,7 +71,7 @@ storeAnalyze grin = do
         fm _ _ = False
     mapM_ (\ (x,y) -> putStrLn $ show x ++ " -> " ++ show y) (Map.toList cmap)
     let grin'' = runIdentity $ tickleM (lastLam cmap) grin'
-    return grin''
+    pure grin''
 
 isHeap TyNode = True
 isHeap TyINode = True
@@ -85,28 +85,28 @@ firstLam fname lam = g Nothing fname lam where
                 vu <- V `liftM` newUniq
                 g wtd [[Vr vu]]
                 tell $ mconcat [ Left (Vr vu) `islte` Left v | v' <- toVs vs, v <- v'  ]
-                return (BaseOp (StoreNode sh) [n,Var vu TyRegion])
+                pure (BaseOp (StoreNode sh) [n,Var vu TyRegion])
             f wtd (e :>>= as :-> body) = do
                 e' <- f (Just as) e
                 body' <- f wtd body
-                return (e' :>>= as :-> body')
+                pure (e' :>>= as :-> body')
             f wtd (Case e as) = Case e `liftM` mapM (tickleM  (f wtd)) as
-            f wtd (Return xs) = g wtd (toVs xs) >> return (Return xs)
-            f wtd e@(BaseOp Promote xs) = g wtd (toVs xs) >> return e
-            f wtd e@(BaseOp Demote xs) = g wtd (toVs xs) >> return e
-            f wtd e@(BaseOp Redirect xs) = g Nothing (toVs xs) >> return e
-            f wtd e@(BaseOp Overwrite [Var v _,n]) = do tell $ mconcat [ Left (Vb v) `islte` Left r | r <- concat $ toVs [n] ] ; return e
+            f wtd (Return xs) = g wtd (toVs xs) >> pure (Return xs)
+            f wtd e@(BaseOp Promote xs) = g wtd (toVs xs) >> pure e
+            f wtd e@(BaseOp Demote xs) = g wtd (toVs xs) >> pure e
+            f wtd e@(BaseOp Redirect xs) = g Nothing (toVs xs) >> pure e
+            f wtd e@(BaseOp Overwrite [Var v _,n]) = do tell $ mconcat [ Left (Vb v) `islte` Left r | r <- concat $ toVs [n] ] ; pure e
             f wtd e@(App fn vs ty) = do
                 tell $ mconcat [ Left (Va fn n) `islte` Left (Vb v) | (n,Var v t) <- zip naturals vs, isHeap t ]
-                return e
+                pure e
             f wtd e@(Let { expDefs = defs, expBody = b }) = do
                 defs' <- mapM (tickleM (g' wtd)) defs
                 b <- f wtd b
-                return $ updateLetProps e { expDefs = defs', expBody = b }
+                pure $ updateLetProps e { expDefs = defs', expBody = b }
             f wtd e =  do
                 let zs = Set.toList (Set.map (Vb . fst) $ Set.filter (isHeap . snd) (freeVars e))
                 tell $ mconcat [ Right E `islte` Left r | r <- zs ];
-                return e
+                pure e
 
             g Nothing vs = tell $ mconcat [ Right E `islte` Left v | v' <- vs, v <- v' ]
             g (Just as) vs = tell $ mconcat [ Left a `islte` Left v | (a',v') <- zip (toVs as) vs, a <- a', v <- v']
@@ -116,15 +116,15 @@ firstLam fname lam = g Nothing fname lam where
                 f [] rs = reverse rs
                 f (x:xs) rs = f xs (Set.toList (Set.map (Vb . fst) $ Set.filter (isHeap . snd) (freeVars x)):rs)
         b <- f wtd body
-        return (as :-> b)
+        pure (as :-> b)
     g' wtd (fname,b) = do
         b <- g wtd fname b
-        return (fname,b)
+        pure (fname,b)
 
 lastLam :: Map.Map Vr T -> Lam -> Identity Lam
 lastLam cmap  lam = tickleM f lam where
     f (BaseOp (StoreNode sh) [n,Var r TyRegion]) = do
         case Map.lookup (Vr r) cmap of
-            Just S -> return (BaseOp (StoreNode sh) [n,region_stack])
-            _ ->  return (BaseOp (StoreNode sh) [n])
+            Just S -> pure (BaseOp (StoreNode sh) [n,region_stack])
+            _ ->  pure (BaseOp (StoreNode sh) [n])
     f e = tickleM f e

@@ -28,7 +28,7 @@ isEnum _ = False
 unboxFunction :: Monad m => Atom -> Item -> m (Exp -> Exp, Exp -> Exp, Ty, Item)
 unboxFunction _ x | getType x == tyUnit = fail "unboxFunction: return type is already ()"
 -- get rid of any fully constant values in return
-unboxFunction fn item | any isLeft rvs = return (unboxReturn, unboxCall, returnType, nvs) where
+unboxFunction fn item | any isLeft rvs = pure (unboxReturn, unboxCall, returnType, nvs) where
     vs = fromTuple item
     rvs = [ case constantItem v of Just x -> Left x ; _ -> Right v | v <- vs ]
     nvs = tuple (rights rvs)
@@ -39,7 +39,7 @@ unboxFunction fn item | any isLeft rvs = return (unboxReturn, unboxCall, returnT
     vars' = concat [ perhapsM (isRight r) (Var v t)  | v <- [v1 ..] | t <- map getType vs | r <- rvs ]
 
 -- unbox enumerated types
-unboxFunction fn (NodeValue vs) | all isEnum (Set.toList vs) = return (unboxReturn, unboxCall, TyTag, itemTag) where
+unboxFunction fn (NodeValue vs) | all isEnum (Set.toList vs) = pure (unboxReturn, unboxCall, TyTag, itemTag) where
     unboxReturn (Return (NodeC t [])) = Return (Tag t)
     unboxReturn e = e :>>= nodev :-> Return var
     unboxCall (App a as ty) = App a as TyTag :>>= var :-> Return nodev
@@ -55,18 +55,18 @@ unboxFunction fn (NodeValue vs) | [NV t args] <- Set.toList vs  =  let
     unboxReturn e = e :>>= NodeC t vars :-> Return (tuple vars)
     unboxCall (App a as _) | a == fn = App a as returnType :>>= tuple vars :-> Return (NodeC t vars)
     vars  = [Var v t | v <- [v1 ..] | t <- map getType args ]
-    in return (unboxReturn, unboxCall, returnType, tuple args)
+    in pure (unboxReturn, unboxCall, returnType, tuple args)
 
 unboxFunction _ item = fail "function not unboxable" -- (id,id,getType item)
 
 constantItem (NodeValue vs) | [NV t xs] <- Set.toList vs  = do
     xs <- mapM constantItem xs
-    return (NodeC t xs)
+    pure (NodeC t xs)
 constantItem (TupledValue xs) = do
     xs <- mapM constantItem xs
-    return (Tup xs)
+    pure (Tup xs)
 constantItem (HeapValue vs) | [HV _ (Right val)] <- Set.toList vs  = do
-    return (Const val)
+    pure (Const val)
 constantItem _ = fail "not constant item"
 
 {-# NOINLINE unboxReturnValues #-}
@@ -77,7 +77,7 @@ unboxReturnValues grin = do
         ubc _ = False
         cfns = filter ubc (fsts $ grinFuncs grin)
         pf fn | Just item <- Map.lookup fn (grinReturnTags grin) =
-            do x <- unboxFunction fn item ; return $ Map.singleton fn x
+            do x <- unboxFunction fn item ; pure $ Map.singleton fn x
         fns = Map.unions $ concatMap pf cfns
         retTag fn _ | Just (_,_,_,ret) <- Map.lookup fn fns = ret
         retTag _ x = x
@@ -96,7 +96,7 @@ unboxReturnValues grin = do
         grinReturnTags = Map.mapWithKey retTag (grinReturnTags grin),
         grinTypeEnv = mtenv (grinTypeEnv grin)
         }
-    if Map.null fns then return newgrin else unboxReturnValues newgrin
+    if Map.null fns then pure newgrin else unboxReturnValues newgrin
 
 convertReturns unboxReturn lam = g lam where
     g (l :-> e) = l :-> f e
@@ -106,7 +106,7 @@ convertReturns unboxReturn lam = g lam where
     f e@MkCont { expCont = c , expLam = b } = e { expCont = g c, expLam = g b }
     f e = unboxReturn e
 
-convertApps doApp lam = g lam where
+convertApps doApp = g where
     g (l :-> e) = l :-> f e
     f (e :>>= l) = f e :>>= g l
     f e@Case { expAlts = as } = e { expAlts = map g as }

@@ -120,15 +120,15 @@ isBoxyMetaVar :: MetaVar -> Bool
 isBoxyMetaVar MetaVar { metaType = t } = t > Tau
 
 extractTyVar ::  Monad m => Type -> m Tyvar
-extractTyVar (TVar tv) = return tv
+extractTyVar (TVar tv) = pure tv
 extractTyVar t = fail $ "not a Var:" ++ show t
 
 extractMetaVar :: Monad m => Type -> m MetaVar
-extractMetaVar (TMetaVar t)  = return t
+extractMetaVar (TMetaVar t)  = pure t
 extractMetaVar t = fail $ "not a metaTyVar:" ++ show t
 
 extractBox :: Monad m => Type -> m MetaVar
-extractBox (TMetaVar mv) | metaType mv > Tau  = return mv
+extractBox (TMetaVar mv) | metaType mv > Tau  = pure mv
 extractBox t = fail $ "not a metaTyVar:" ++ show t
 
 newtype UnVarOpt = UnVarOpt {
@@ -153,7 +153,7 @@ instance (UnVar a,UnVar b) => UnVar (a,b) where
     unVar' (a,b) = do
         a <- unVar' a
         b <- unVar' b
-        return (a,b)
+        pure (a,b)
 
 instance UnVar t => UnVar (Qual t) where
     unVar' (ps :=> t) = liftM2 (:=>) (unVar' ps) (unVar' t)
@@ -162,12 +162,12 @@ instance UnVar Type where
     unVar' tv =  do
         let ft (TForAll vs qt) = do
                 qt' <- unVar' qt
-                return $ TForAll vs qt'
+                pure $ TForAll vs qt'
             ft (TExists vs qt) = do
                 qt' <- unVar' qt
-                return $ TExists vs qt'
+                pure $ TExists vs qt'
             ft (TAp (TAp (TCon arr) a1) a2) | tyconName arr == tc_Arrow = ft (TArrow a1 a2)
-            ft t@(TMetaVar _) = return t
+            ft t@(TMetaVar _) = pure t
             ft t = tickleM (unVar' . (id :: Type -> Type)) t
         tv' <- findType tv
         ft tv'
@@ -176,33 +176,33 @@ followTaus :: MonadIO m => Type -> m Type
 followTaus tv@(TMetaVar mv@MetaVar {metaRef = r }) | not (isBoxyMetaVar mv) = liftIO $ do
     rt <- readIORef r
     case rt of
-        Nothing -> return tv
+        Nothing -> pure tv
         Just t -> do
             t' <- followTaus t
             writeIORef r (Just t')
-            return t'
-followTaus tv = return tv
+            pure t'
+followTaus tv = pure tv
 
 findType :: MonadIO m => Type -> m Type
 findType tv@(TMetaVar MetaVar {metaRef = r }) = liftIO $ do
     rt <- readIORef r
     case rt of
-        Nothing -> return tv
+        Nothing -> pure tv
         Just t -> do
             t' <- findType t
             writeIORef r (Just t')
-            return t'
-findType tv = return tv
+            pure t'
+findType tv = pure tv
 
 readMetaVar :: MonadIO m => MetaVar -> m (Maybe Type)
 readMetaVar MetaVar { metaRef = r }  = liftIO $ do
     rt <- readIORef r
     case rt of
-        Nothing -> return Nothing
+        Nothing -> pure Nothing
         Just t -> do
             t' <- findType t
             writeIORef r (Just t')
-            return (Just t')
+            pure (Just t')
 
 {-
 freeMetaVars :: Type -> S.Set MetaVar
@@ -268,7 +268,7 @@ instance Tickleable Type Type where
     tickleM f (TExists ta (ps :=> t)) = do
         ps <- mapM (tickleM f) ps
         liftM (TExists ta . (ps :=>)) (f t)
-    tickleM _ t = return t
+    tickleM _ t = pure t
 
 data Rule = RuleSpec {
     ruleUniq :: (Module,Int),
@@ -330,4 +330,4 @@ instance UnVar Type => UnVar CoerceTerm where
     unVar' (CTAp ts) = CTAp `liftM` unVar' ts
     unVar' (CTFun ct) = CTFun `liftM` unVar' ct
     unVar' (CTCompose c1 c2) = liftM2 CTCompose (unVar' c1) (unVar' c2)
-    unVar' x = return x
+    unVar' x = pure x

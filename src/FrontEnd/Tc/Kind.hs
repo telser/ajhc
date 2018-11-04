@@ -82,7 +82,7 @@ _           `isSubsumedBy` _            = False
 
 kindCombine :: Monad m => Kind -> Kind -> m Kind
 kindCombine x y = g x y where
-    f x y | x == y = return x
+    f x y | x == y = pure x
 
     f KQuest x = fquest x
     f x  KQuest = fquest x
@@ -90,13 +90,13 @@ kindCombine x y = g x y where
     f x  KQuestQuest = fquest2 x
     f x y = fail $ "kindCombine: " ++ show (x,y)
     fquest (KNamed n) = fail $ "Attempt to unify named kind" <+> tshow n <+> "with ?"
-    fquest x = return x
+    fquest x = pure x
     fquest2 (KNamed n) = fail $ "Attempt to unify named kind" <+> tshow n <+> "with ??"
     fquest2 KUTuple = fail $ "Attempt to unify unboxed tuple with ??"
-    fquest2 KQuest = return KQuestQuest
-    fquest2 x = return x
-    g (KBase x) (KBase y) = f x y >>= return . KBase
-    g (Kfun a b) (Kfun a' b') = return Kfun `ap` g a a' `ap` g b b'
+    fquest2 KQuest = pure KQuestQuest
+    fquest2 x = pure x
+    g (KBase x) (KBase y) = f x y >>= pure . KBase
+    g (Kfun a b) (Kfun a' b') = pure Kfun `ap` g a a' `ap` g b b'
     g x y = fail $ "kindCombine: " ++ show (x,y)
 
 data KindConstraint
@@ -127,8 +127,8 @@ data Kindvar = Kindvar {
     }
 
 instance Binary Kindvar where
-    put _ = return ()
-    get = return (error "Binary.Kindvar.get")
+    put _ = pure ()
+    get = pure (error "Binary.Kindvar.get")
 
 instance Eq Kindvar where
     a == b = kvarUniq a == kvarUniq b

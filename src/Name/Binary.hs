@@ -13,7 +13,7 @@ instance Binary IdSet where
     get = do
         (idl:: [Id])   <- get
         (ndl:: [Name]) <- get
-        return (idSetFromDistinctAscList idl `mappend` idSetFromList (map toId ndl))
+        pure (idSetFromDistinctAscList idl `mappend` idSetFromList (map toId ndl))
 
 instance Binary a => Binary (IdMap a) where
     put ids = do
@@ -22,4 +22,4 @@ instance Binary a => Binary (IdMap a) where
     get = do
         idl <- get
         ndl <- get
-        return (idMapFromDistinctAscList idl `mappend` idMapFromList [ (toId n,v) | (n,v) <- ndl ])
+        pure (idMapFromDistinctAscList idl `mappend` idMapFromList [ (toId n,v) | (n,v) <- ndl ])

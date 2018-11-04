@@ -132,7 +132,7 @@ instance ToName String where
 
 getModule :: Monad m => Name -> m Module
 getModule n = case nameParts n of
-    (_,Just m,_) -> return m
+    (_,Just m,_) -> pure m
     _ -> fail "Name is unqualified."
 
 getIdent :: Name -> String

@@ -71,26 +71,26 @@ deadCode stats roots grin = do
                                         i <- [0 .. length args] ]
         directFuncs =  funSet \\ suspFuncs \\ pappFuncs
         fg xs = fromList [ x | (x,True) <- xs ]
-    newCafs <- flip mconcatMapM (grinCafs grin) $ \ (x,y) -> if x `member` cafSet then return [(x,y)] else tick stats "Optimize.dead-code.caf" >> return []
+    newCafs <- flip mconcatMapM (grinCafs grin) $ \ (x,y) -> if x `member` cafSet then pure [(x,y)] else tick stats "Optimize.dead-code.caf" >> pure []
     let f ((x,y):xs) rs ws = do
             if not $ x `member` funSet then tick stats "Optimize.dead-code.func" >> f xs rs ws else do
             (ws',r) <- runStatIO stats $ removeDeadArgs postInline funSet directFuncs cafSet argSet (x,y) ws
             f xs (r:rs) ws'
-        f [] rs _ = return rs
+        f [] rs _ = pure rs
     newFuncs <- f (grinFuncs grin) [] whizState
     --newFuncs <- flip mconcatMapM (grinFuncs grin) $ \ (x,y) -> do
     let (TyEnv mp) = grinTypeEnv grin
     mp' <- flip mconcatMapM (toList mp) $ \ (x,tyty@TyTy { tySlots = ts }) -> case Just x  of
-        Just _ | tagIsFunction x, not $ x `member` funSet -> return []
+        Just _ | tagIsFunction x, not $ x `member` funSet -> pure []
         Just fn | fn `member` directFuncs -> do
             let da (t,i)
-                    | member (fn,i) argSet = return [t]
-                    | otherwise = tick stats ("Optimize.dead-code.arg-func.{" ++ show x ++ "-" ++ show i) >> return []
+                    | member (fn,i) argSet = pure [t]
+                    | otherwise = tick stats ("Optimize.dead-code.arg-func.{" ++ show x ++ "-" ++ show i) >> pure []
             ts' <- mconcatMapM da (zip ts naturals)
-            return [(x,tyty { tySlots = ts' })]
-        _ -> return [(x,tyty)]
+            pure [(x,tyty { tySlots = ts' })]
+        _ -> pure [(x,tyty)]
 
-    return $ setGrinFunctions newFuncs grin {
+    pure $ setGrinFunctions newFuncs grin {
         grinCafs = newCafs,
         grinPartFunctions = pappFuncs,
         grinTypeEnv = TyEnv $ fromList mp',
@@ -125,7 +125,7 @@ go fixer pappFuncs suspFuncs usedFuncs usedArgs usedCafs postInline (fn,as :-> b
         fn' <- supplyValue usedFuncs fn
         let varValue v | v < v0 = sValue usedCafs v
                        | otherwise = sValue usedVars v
-            f e = g e >> return e
+            f e = g e >> pure e
             g (BaseOp Eval [e]) =  addRule (doNode e)
             g (BaseOp Apply {} vs) =  addRule (mconcatMap doNode vs)
             g (Case e _) =  addRule (doNode e)
@@ -148,12 +148,12 @@ go fixer pappFuncs suspFuncs usedFuncs usedArgs usedCafs postInline (fn,as :-> b
                 flip mapM_ (map funcDefName defs) $ \n -> do
                     --n' <- supplyValue usedFuncs n
                     --addRule $ fn' `implies` n'
-                    return ()
-            g Error {} = return ()
+                    pure ()
+            g Error {} = pure ()
             -- TODO - handle function and case return values smartier.
             g (Return ns) = mapM_ (addRule . doNode) ns
             g x = error $ "deadcode.g: " ++ show x
-            h' (p,e) = h (p,e) >> return (Just (p,e))
+            h' (p,e) = h (p,e) >> pure (Just (p,e))
             h (p,BaseOp (StoreNode _) [v]) = addRule $ mconcat $ [ conditionalRule id  (varValue pv) (doNode v) | pv <- freeVars p]
             h (p,BaseOp Demote [v]) = addRule $ mconcat $ [ conditionalRule id  (varValue pv) (doNode v) | pv <- freeVars p]
             h (p,Alloc { expValue = v, expCount = c, expRegion = r }) = addRule $ mconcat $ [ conditionalRule id  (varValue pv) (doNode v `mappend` doNode c `mappend` doNode r) | pv <- freeVars p]
@@ -173,61 +173,61 @@ go fixer pappFuncs suspFuncs usedFuncs usedArgs usedCafs postInline (fn,as :-> b
             doConst _ = mempty
 
         (nl,_) <- whiz (\_ -> id) h' f whizState (as :-> body)
-        return nl
+        pure nl
 
 removeDeadArgs :: MonadStats m => Bool -> Set.Set Atom -> Set.Set Atom -> (Set.Set Var) -> (Set.Set (Atom,Int)) -> (Atom,Lam) -> WhizState -> m (WhizState,(Atom,Lam))
-removeDeadArgs postInline funSet directFuncs usedCafs usedArgs (a,l) whizState =  whizExps f (margs a l) >>= \(l,ws) -> return (ws,(a,l)) where
-    whizExps f l = whiz (\_ x -> x) (\(p,e) -> f e >>= \e' -> return  (Just (p,e'))) f whizState l
+removeDeadArgs postInline funSet directFuncs usedCafs usedArgs (a,l) whizState =  whizExps f (margs a l) >>= \(l,ws) -> pure (ws,(a,l)) where
+    whizExps f l = whiz (\_ x -> x) (\(p,e) -> f e >>= \e' -> pure  (Just (p,e'))) f whizState l
     margs fn (as :-> e) | a `Set.member` directFuncs = ((removeArgs fn as) :-> e)
     margs _ x = x
     f (App fn as ty)  = do
         as <- dff fn as
         as <- mapM clearCaf as
-        return $ App fn as ty
+        pure $ App fn as ty
     f (Return [NodeC fn as]) | Just fn' <- tagToFunction fn = do
         as <- dff' fn' as
         as <- mapM clearCaf as
-        return $ Return [NodeC fn as]
+        pure $ Return [NodeC fn as]
     f (BaseOp (StoreNode False) [NodeC fn as]) |  Just fn' <- tagToFunction fn = do
         as <- dff' fn' as
         as <- mapM clearCaf as
-        return $ BaseOp (StoreNode False) [NodeC fn as]
+        pure $ BaseOp (StoreNode False) [NodeC fn as]
     f (BaseOp Overwrite [(Var v TyINode),_]) | deadCaf v = do
         mtick $ toAtom "Optimize.dead-code.caf-update"
-        return $ Return []
+        pure $ Return []
     f (BaseOp Overwrite [p,NodeC fn as]) |  Just fn' <- tagToFunction fn = do
         as <- dff' fn' as
         as <- mapM clearCaf as
-        return $ BaseOp Overwrite  [p,NodeC fn as]
+        pure $ BaseOp Overwrite  [p,NodeC fn as]
 --    f (Update (Var v TyINode) _) | deadCaf v = do
 --        mtick $ toAtom "Optimize.dead-code.caf-update"
---        return $ Return []
+--        pure $ Return []
 --    f (Update p (NodeC fn as)) |  Just fn' <- tagToFunction fn = do
 --        as <- dff' fn' as
 --        as <- mapM clearCaf as
---        return $ Update p (NodeC fn as)
-    f lt@Let { expDefs = defs }  = return $ updateLetProps lt { expDefs = defs' } where
+--        pure $ Update p (NodeC fn as)
+    f lt@Let { expDefs = defs }  = pure $ updateLetProps lt { expDefs = defs' } where
         defs' = [ updateFuncDefProps df { funcDefBody = margs name body } | df@FuncDef { funcDefName = name, funcDefBody = body } <- defs, name `Set.member` funSet ]
-    f x = return x
-    dff' fn as | fn `member` directFuncs = return as
+    f x = pure x
+    dff' fn as | fn `member` directFuncs = pure as
     dff' fn as = dff'' fn as
-    dff fn as | fn `member` directFuncs = return (removeArgs fn as)
+    dff fn as | fn `member` directFuncs = pure (removeArgs fn as)
     dff fn as = dff'' fn as
-    dff'' fn as | not (fn `member` funSet) = return as -- if function was dropped, we don't have argument use information.
+    dff'' fn as | not (fn `member` funSet) = pure as -- if function was dropped, we don't have argument use information.
     dff'' fn as = mapM df  (zip as naturals) where
         df (a,i) | not (deadVal a) && not (member (fn,i) usedArgs) = do
             mtick $ toAtom "Optimize.dead-code.func-arg"
-            return $ properHole (getType a)
-        df (a,_)  = return a
+            pure $ properHole (getType a)
+        df (a,_)  = pure a
     clearCaf (Var v TyINode) | deadCaf v = do
         mtick $ toAtom "Optimize.dead-code.caf-arg"
-        return (properHole TyINode)
+        pure (properHole TyINode)
     clearCaf (NodeC a xs) = do
         xs <- mapM clearCaf xs
-        return $ NodeC a xs
-    clearCaf (Index a b) = return Index `ap` clearCaf a `ap` clearCaf b
+        pure $ NodeC a xs
+    clearCaf (Index a b) = pure Index `ap` clearCaf a `ap` clearCaf b
     clearCaf (Const a) = Const `liftM` clearCaf a
-    clearCaf x = return x
+    clearCaf x = pure x
     deadCaf v = v < v0 && not (v `member` usedCafs)
     deadVal (Lit 0 _) = True
     deadVal x = isHole x

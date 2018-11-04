@@ -119,25 +119,25 @@ instance DocLike ShowS where
     a <> b = a . b
 
 instance (TextLike a, Monad m) => TextLike (m a) where
-    empty = return empty
-    char x = return (char x)
-    text x = return (text x)
+    empty = pure empty
+    char x = pure (char x)
+    text x = pure (text x)
 
 instance (DocLike a, Monad m,TextLike (m a)) => DocLike (m a) where
     a <$> b = do
         a <- a
         b <- b
-        return (a <$> b)
+        pure (a <$> b)
     a <> b = do
         a <- a
         b <- b
-        return (a <> b)
+        pure (a <> b)
     a <+> b = do
         a <- a
         b <- b
-        return (a <+> b)
-    vcat xs = sequence xs >>= return . vcat
-    hsep xs = sequence xs >>= return . hsep
+        pure (a <+> b)
+    vcat xs = sequence xs >>= pure . vcat
+    hsep xs = sequence xs >>= pure . hsep
 
 ---------------------
 -- HughesPJ instances

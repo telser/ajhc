@@ -24,8 +24,8 @@ type Builtin = [Val] -> IO Val
 builtins = []
 builtinMap = Map.fromList [ (x,y) | (x,y) <- builtins ]
 
-createCafMap as = f vars [] >>= return . Map.fromList  where
-    f [] xs = return xs
+createCafMap as = f vars [] >>= pure . Map.fromList  where
+    f [] xs = pure xs
     f ((x,y):xs) ys = newIORef y >>= \y -> f xs ((x,Addr y):ys)
     vars = as
 
@@ -34,15 +34,15 @@ evaluate Grin { grinTypeEnv = tyEnv, grinFunctions = ts, grinCafs = cafs } =  do
     stats <- Stats.new
     cafMap <- createCafMap cafs
     let f x = interpret stats tyEnv cafMap builtinMap (fromList  ts) x
-        g (App t [l@Lit {}] _) | t == funcEval = return l
-        g (App t [Const n] _) | t == funcEval = return n
+        g (App t [l@Lit {}] _) | t == funcEval = pure l
+        g (App t [Const n] _) | t == funcEval = pure n
         g e = f e >>= \x -> case x of
             NodeC t xs -> do
                 xs <- mapM (g . gEval) xs
-                return $ NodeC t xs
-            z -> return z
+                pure $ NodeC t xs
+            z -> pure z
     v <- g (App funcMain [] tyUnit)
-    return (v,stats)
+    pure (v,stats)
 
 funcCalls = toAtom "Function Calls"
 primCalls = toAtom "Primitive Calls"
@@ -65,41 +65,41 @@ interpret stats te cafMap primMap scMap e = f mempty e where
             Nothing -> error $ "Unknown App: " ++ show (App a xs' ty)
             Just ((Tup as :-> e)) -> f (Map.fromList (zip [ v | Var v _ <- as] xs')) e
       where xs' = map (le env) xs
-    f env (Prim Primitive { primAPrim = APrim CCast {} _, primType = (_,t)} [x]) = return $ (Lit n t)
+    f env (Prim Primitive { primAPrim = APrim CCast {} _, primType = (_,t)} [x]) = pure $ (Lit n t)
         where (Lit n _) = le env x
-    f env (Prim Primitive { primAPrim = APrim Func { funcName = "putwchar" } _} [x]) = putChar (chr $ fromIntegral n) >> return unit
+    f env (Prim Primitive { primAPrim = APrim Func { funcName = "putwchar" } _} [x]) = putChar (chr $ fromIntegral n) >> pure unit
         where (Lit n _) = le env x
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "<=" } _, primType = (_,t)} [x,y]) = if x' <= y' then return (Lit 1 t) else return (Lit 0 t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "<=" } _, primType = (_,t)} [x,y]) = if x' <= y' then pure (Lit 1 t) else pure (Lit 0 t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = ">=" } _, primType = (_,t)} [x,y]) = if x' >= y' then return (Lit 1 t) else return (Lit 0 t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = ">=" } _, primType = (_,t)} [x,y]) = if x' >= y' then pure (Lit 1 t) else pure (Lit 0 t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = ">" } _, primType = (_,t)} [x,y]) = if x' > y' then return (Lit 1 t) else return (Lit 0 t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = ">" } _, primType = (_,t)} [x,y]) = if x' > y' then pure (Lit 1 t) else pure (Lit 0 t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "<" } _, primType = (_,t)} [x,y]) = if x' < y' then return (Lit 1 t) else return (Lit 0 t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "<" } _, primType = (_,t)} [x,y]) = if x' < y' then pure (Lit 1 t) else pure (Lit 0 t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "==" } _, primType = (_,t)} [x,y]) = if x' == y' then return (Lit 1 t) else return (Lit 0 t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "==" } _, primType = (_,t)} [x,y]) = if x' == y' then pure (Lit 1 t) else pure (Lit 0 t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "+" } _, primType = (_,t)} [x,y]) = return (Lit (x' + y') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "+" } _, primType = (_,t)} [x,y]) = pure (Lit (x' + y') t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "/" } _, primType = (_,t)} [x,y]) = return (Lit (x' `div` y') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "/" } _, primType = (_,t)} [x,y]) = pure (Lit (x' `div` y') t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "%" } _, primType = (_,t)} [x,y]) = return (Lit (x' `mod` y') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "%" } _, primType = (_,t)} [x,y]) = pure (Lit (x' `mod` y') t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "-" } _, primType = (_,t)} [x,y]) = return (Lit (x' - y') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "-" } _, primType = (_,t)} [x,y]) = pure (Lit (x' - y') t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "*" } _, primType = (_,t)} [x,y]) = return (Lit (x' * y') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "*" } _, primType = (_,t)} [x,y]) = pure (Lit (x' * y') t)
         where (Lit x' _) = le env x
               (Lit y' _) = le env y
-    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "-" } _, primType = (_,t)} [x]) = return (Lit (negate x') t)
+    f env (Prim Primitive { primAPrim = APrim Operator { primOp = "-" } _, primType = (_,t)} [x]) = pure (Lit (negate x') t)
         where (Lit x' _) = le env x
     f env (Prim p xs) = do
         let a = primName p
@@ -111,17 +111,17 @@ interpret stats te cafMap primMap scMap e = f mempty e where
         case Map.lookup a primMap of
             Nothing -> error $ "Unknown Primitive: " ++ show (Prim p xs')
             Just action -> do action xs'
-    f env (Return v) = return (le env v)
+    f env (Return v) = pure (le env v)
     f env (Store v) = do
         Stats.tick stats (toAtom "Allocations Performed")
         fmap Addr $ newIORef (le env v)
     f env (Fetch x)
         | (Addr x) <- le env x = readIORef x
-        | (Const x) <- le env x  = return x
+        | (Const x) <- le env x  = pure x
     f env (Update x v) | (Addr x) <- le env x = do
         Stats.tick stats (toAtom "Updates Performed")
-        (writeIORef x $! (le env v)) >> return unit
-    f env (Update x v) | (Const x) <- le env x, x == le env v =  return unit
+        (writeIORef x $! (le env v)) >> pure unit
+    f env (Update x v) | (Const x) <- le env x, x == le env v =  pure unit
     f env (Update x v)  = fail $ "Bad update: " ++ show (le env x,le env v)
     f env (Error s t) = fail $ render $  tshow (s,t) <$> (prettyEnv env)
 --    f env (Eval x)
@@ -131,7 +131,7 @@ interpret stats te cafMap primMap scMap e = f mempty e where
 --            v <- readIORef ref
 --            nv <- doEval v
 --            writeIORef ref nv
---            return nv
+--            pure nv
 --        where
 --            lx = le env x
 --    f env (Apply x y)
@@ -156,16 +156,16 @@ interpret stats te cafMap primMap scMap e = f mempty e where
 
     doApply (NodeC t xs) y
         | n == (1::Int) = f mempty (App (toAtom $ 'f':rs) (xs ++ [y]) TyNode)  -- TODO, right?
-        | n > 1 = return $ NodeC (toAtom $ 'P':show (n - 1) ++ "_" ++ rs) (xs ++ [y])
+        | n > 1 = pure $ NodeC (toAtom $ 'P':show (n - 1) ++ "_" ++ rs) (xs ++ [y])
         where
         ('P':cs) = fromAtom t
         (n','_':rs) = span isDigit cs
         n = read n'
     doApply x y = error $ "doApply " ++ show (x,y)
     doEval x@(NodeC t xs)
-        | 'P':_ <- t' = return x
-        | 'T':_ <- t' = return x
-        | 'C':_ <- t' = return x
+        | 'P':_ <- t' = pure x
+        | 'T':_ <- t' = pure x
+        | 'C':_ <- t' = pure x
         | 'F':rs <- t' = f mempty (App (toAtom $ 'f':rs) xs TyNode)  -- TODO, right?
         | 'B':rs <- t' = f mempty (App (toAtom $ 'b':rs) xs TyNode)  -- TODO, right?
         where
@@ -173,14 +173,14 @@ interpret stats te cafMap primMap scMap e = f mempty e where
     doEval x = error $ "doEval " ++ show x
 
     bind :: Monad m => Val -> Val -> m (Map Var Val)
-    bind (Var (V 0) _) _ = return mempty
-    bind (Var v _) r = return $ singleton v r
-    bind (Lit i _) (Lit i' _) | i == i' = return mempty
+    bind (Var (V 0) _) _ = pure mempty
+    bind (Var v _) r = pure $ singleton v r
+    bind (Lit i _) (Lit i' _) | i == i' = pure mempty
     bind (Tup xs) (Tup ys) = liftM mconcat $ sequence $  zipWith bind xs ys
-    bind (Tag i) (Tag i') | i == i' = return mempty
+    bind (Tag i) (Tag i') | i == i' = pure mempty
     bind (NodeV v vs) (NodeC t vs') = do
         be <- liftM mconcat $ sequence $  zipWith bind vs vs'
-        return (be `mappend` singleton v (Tag t))
+        pure (be `mappend` singleton v (Tag t))
     bind (NodeC t vs) (NodeC t' vs') | t == t' = do
         liftM mconcat $ sequence $  zipWith bind vs vs'
     bind v r | getType v == getType r = fail $ "unbindable: "  ++ show (v,r,getType v,getType r)   -- check type to be sure

@@ -82,7 +82,7 @@ processModule defs m = do
     wdump FD.Renamed $ do
         putStrLn " \n ---- renamed code ---- \n"
         putStrLn $ HsPretty.render $ HsPretty.ppHsModule $  mod'
-    return (m { modInfoReverseMap = rmap,
+    pure (m { modInfoReverseMap = rmap,
                 modInfoImport = imp ++ driftResolvedNames,
                 modInfoHsModule = mod' }, errs)
 
@@ -103,11 +103,11 @@ getDataDesc :: Monad m => HsDecl -> m (Name,DatDesc)
 getDataDesc d = g d where
     g desc = do
         r <- f d
-        return (hsDeclName desc,r)
-    f HsDataDecl { hsDeclDeclType = DeclTypeNewtype, hsDeclCons = (hsConDeclName . head -> cn)  } = return $ DatNewT cn
+        pure (hsDeclName desc,r)
+    f HsDataDecl { hsDeclDeclType = DeclTypeNewtype, hsDeclCons = (hsConDeclName . head -> cn)  } = pure $ DatNewT cn
     f HsDataDecl { hsDeclCons = cs }
-        | all null $ map hsConDeclArgs cs = return $ DatEnum (map hsConDeclName cs)
-    f HsDataDecl { hsDeclCons = cs } = return $
+        | all null $ map hsConDeclArgs cs = pure $ DatEnum (map hsConDeclName cs)
+    f HsDataDecl { hsDeclCons = cs } = pure $
         DatMany [ (hsConDeclName c, (length . hsConDeclArgs) c) | c <- cs]
     f _ = fail "getDataDesc: not a data declaration"
 
@@ -127,8 +127,8 @@ tiModules htc ms = do
         [ filter isHsTypeDecl (hsModuleDecls $ modInfoHsModule m) | m <- ms]
     let ts = thisTypeSynonyms `mappend` hoTypeSynonyms htc
     let f x = expandTypeSyns ts (modInfoHsModule x) >>=
-            return . FrontEnd.Infix.infixHsModule fixityMap >>=
-            \z -> return x { modInfoHsModule = z }
+            pure . FrontEnd.Infix.infixHsModule fixityMap >>=
+            \z -> pure x { modInfoHsModule = z }
     ms <- mapM f ms
     processIOErrors
     let ds = concat [ hsModuleDecls $ modInfoHsModule m | m <- ms ]
@@ -249,7 +249,7 @@ tiModules htc ms = do
             lup v = case Map.lookup v cc of
                 Just (CTAbs xs) -> ctAp (map TVar xs)
                 _ -> ctId
-        return (env,T.toList $ checkedRules out,cc',tcDs)
+        pure (env,T.toList $ checkedRules out,cc',tcDs)
 
     when (dump FD.Decls) $ do
         putStrLn " \n ---- typechecked code ---- \n"
@@ -263,7 +263,7 @@ tiModules htc ms = do
         putStrLn " ---- the coersions of identifiers ---- "
         mapM_ putStrLn [ show n ++  " --> " ++ show s |  (n,s) <- Map.toList coercions]
 
-    localVarEnv <- return $  localVarEnv `Map.union` noDefaultSigs
+    localVarEnv <- pure $  localVarEnv `Map.union` noDefaultSigs
 
     let pragmaProps = fromList $ Map.toList $ Map.fromListWith mappend
             [(toName Name.Val x,fromList $ readProp w) | HsPragmaProps _ w xs <- ds, x <- xs]
@@ -293,4 +293,4 @@ tiModules htc ms = do
             tiAllAssumptions = allAssumps
         }
     processIOErrors
-    return (hoEx,tiData)
+    pure (hoEx,tiData)

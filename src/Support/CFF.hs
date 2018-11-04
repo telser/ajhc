@@ -93,7 +93,7 @@ lbsCFF bs = ans bs where
         checkByte 6 0x1a
         checkByte 7 0x0a
         let header =  bytesToChunkType b1 b2 b3 (fromIntegral $ ord ' ')
-        return (header,readRest (LBS.drop 8 bs))
+        pure (header,readRest (LBS.drop 8 bs))
 
     bsWord32 :: LBS.ByteString -> Word32
     bsWord32 bs = w where
@@ -125,7 +125,7 @@ bsCFF bs = ans bs where
         checkByte 6 0x1a
         checkByte 7 0x0a
         let header =  bytesToChunkType b1 b2 b3 (fromIntegral $ ord ' ')
-        return (header,readRest (BS.drop 8 bs))
+        pure (header,readRest (BS.drop 8 bs))
 
     bsWord32 :: BS.ByteString -> Word32
     bsWord32 bs = w where
@@ -159,7 +159,7 @@ readCFFHeader h = do
     checkByte 0x0a
     checkByte 0x1a
     checkByte 0x0a
-    return $ bytesToChunkType b1 b2 b3 (fromIntegral $ ord ' ')
+    pure $ bytesToChunkType b1 b2 b3 (fromIntegral $ ord ' ')
 
 writeCFFHeader :: Handle -> FileType -> IO ()
 writeCFFHeader h ft = BS.hPut h (mkCFFHeader ft)
@@ -169,31 +169,31 @@ readCFFInfo h = do
     cffType <- readCFFHeader h
     let readChunk !fo = do
             b <- hIsEOF h
-            if b then return [] else do
+            if b then pure [] else do
             len <- readWord32 h
             ct <- readChunkType h
             hSeek h RelativeSeek (fromIntegral len)
             _csum  <- readWord32 h
             xs <- readChunk (fo + fromIntegral len + 12)
-            return ((ct,fo + 8,fromIntegral len):xs)
+            pure ((ct,fo + 8,fromIntegral len):xs)
 
     xs <- readChunk (8::FileOffset)
-    return (cffType,xs)
+    pure (cffType,xs)
 
 readCFF :: Handle -> IO (ChunkType,[(ChunkType,BS.ByteString)])
 readCFF h = do
     cffType <- readCFFHeader h
     let readChunk = do
             b <- hIsEOF h
-            if b then return [] else do
+            if b then pure [] else do
             len <- readWord32 h
             ct <- readChunkType h
             bs <- BS.hGet h (fromIntegral len)
             _csum <- readWord32 h -- TODO verify checksum
             xs <- readChunk
-            return ((ct,bs):xs)
+            pure ((ct,bs):xs)
     xs <- readChunk
-    return (cffType,xs)
+    pure (cffType,xs)
 
 -- this verifies a cff is of a specific type, and reads a specific chunk only.
 readChunk :: Handle -> ChunkType -> ChunkType -> IO BS.ByteString
@@ -263,7 +263,7 @@ bytesToWord32 b1 b2 b3 b4 = b 3 b1 .|. b 2 b2 .|. b 1 b3 .|. b 0 b4  where
 readChunkType :: Handle -> IO ChunkType
 readChunkType h = do
     w <- readWord32 h
-    return $ ChunkType w
+    pure $ ChunkType w
 
 readWord32 :: Handle -> IO Word32
 readWord32 h = do
@@ -272,7 +272,7 @@ readWord32 h = do
     b3 <- getByte h
     b4 <- getByte h
     let ChunkType ct = bytesToChunkType b1 b2 b3 b4
-    return ct
+    pure ct
 
 writeWord32 :: Handle -> Word32 -> IO ()
 writeWord32 h w = do

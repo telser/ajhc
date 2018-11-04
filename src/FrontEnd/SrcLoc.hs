@@ -84,8 +84,8 @@ located ss x = Located (srcSpan ss) x
 class Monad m => MonadSrcLoc m where
     getSrcLoc  :: m SrcLoc
     getSrcSpan :: m SrcSpan
-    getSrcSpan = getSrcLoc >>= return . srcSpan
-    getSrcLoc = getSrcSpan >>= return . srcLoc
+    getSrcSpan = getSrcLoc >>= pure . srcSpan
+    getSrcLoc = getSrcSpan >>= pure . srcLoc
 
 class MonadSrcLoc m => MonadSetSrcLoc m where
     withSrcLoc :: SrcLoc -> m a -> m a
@@ -97,12 +97,12 @@ withLocation :: (HasLocation l,MonadSetSrcLoc m) => l -> m a -> m a
 withLocation l = withSrcSpan (srcSpan l)
 
 instance Monoid w => MonadSrcLoc (Writer w) where
-    getSrcLoc = return mempty
+    getSrcLoc = pure mempty
 instance Monoid w => MonadSetSrcLoc (Writer w) where
     withSrcLoc _ a = a
 
 instance MonadSrcLoc Identity where
-    getSrcLoc = return mempty
+    getSrcLoc = pure mempty
 instance MonadSetSrcLoc Identity where
     withSrcLoc _ a = a
 

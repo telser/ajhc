@@ -26,10 +26,10 @@ readHFile fn = do
     bs <- BS.readFile fn
     fn' <- shortenPath fn
     (ct,mp) <- bsCFF bs
-    True <- return $ ct == cff_magic
+    True <- pure $ ct == cff_magic
     let hoh = fc fn mp cff_jhdr
     when (hohVersion hoh /= current_version) $ fail "invalid version in hofile"
-    return (fn',hoh,mp)
+    pure (fn',hoh,mp)
 
 fc :: Binary a => FilePath -> [(ChunkType,BS.ByteString)] -> ChunkType -> a
 fc fn mp ct = case lookup ct mp of
@@ -43,7 +43,7 @@ readHoFile fn = do
         idep = fc fn mp cff_idep
         tcI = fc fn mp cff_defs
         build = fc fn mp cff_core
-    return (hoh,idep,Ho { hoModuleGroup = modGroup, hoTcInfo = tcI, hoBuild = build})
+    pure (hoh,idep,Ho { hoModuleGroup = modGroup, hoTcInfo = tcI, hoBuild = build})
 
 recordHoFile ::
     Ho               -- ^ File to record
@@ -57,11 +57,11 @@ recordHoFile ho idep fs header = do
             fs' <- mapM shortenPath fs
             putErrLn $ "Skipping Writing Ho Files: " ++ show fs'
       else do
-    let removeLink' fn = iocatch  (removeFile fn)  (\_ -> return ())
+    let removeLink' fn = iocatch  (removeFile fn)  (\_ -> pure ())
     let g (fn:fs) = do
             f fn
             mapM_ (l fn) fs
-            return ()
+            pure ()
         g [] = error "Ho.g: shouldn't happen"
         l fn fn' = do
             when verbose $ do
@@ -69,7 +69,7 @@ recordHoFile ho idep fs header = do
                 fn_' <- shortenPath fn'
                 when (optNoWriteHo options) $ putErr "Skipping "
                 putErrLn $ printf "Linking haskell object file: %s to %s" fn_' fn_
-            if optNoWriteHo options then return () else do
+            if optNoWriteHo options then pure () else do
             let tfn = fn' ++ ".tmp"
             removeLink' tfn
             createLinkCompat fn tfn
@@ -79,7 +79,7 @@ recordHoFile ho idep fs header = do
                 when (optNoWriteHo options) $ putErr "Skipping "
                 fn' <- shortenPath fn
                 putErrLn $ "Writing haskell object file: " ++ fn'
-            if optNoWriteHo options then return () else do
+            if optNoWriteHo options then pure () else do
             let tfn = fn ++ ".tmp"
                 cfflbs = mkCFFfile cff_magic [
                     (cff_jhdr, compress $ encode header { hohVersion = current_version }),
@@ -108,7 +108,7 @@ recordHlFile l = do
 readHlFile :: FilePath -> IO Library
 readHlFile fn = do
     (_fn',hoh,mp) <- readHFile fn
-    return Library { libHoHeader = hoh, libHoLib =  fc fn mp cff_libr,
+    pure Library { libHoHeader = hoh, libHoLib =  fc fn mp cff_libr,
         libTcMap = fc fn mp cff_ldef, libBuildMap = fc fn mp cff_lcor,
         libFileName = fn, libExtraFiles = fc fn mp cff_file }
 
@@ -116,7 +116,7 @@ instance Binary ExtraFile where
     put (ExtraFile a b) = put (a,b)
     get = do
         (x,y) <- get
-        return $ ExtraFile x y
+        pure $ ExtraFile x y
 
 instance Binary FieldMap where
     put (FieldMap ac ad) = do
@@ -125,7 +125,7 @@ instance Binary FieldMap where
     get = do
     ac <- getMap
     ad <- getMap
-    return (FieldMap ac ad)
+    pure (FieldMap ac ad)
 
 instance Data.Binary.Binary HoHeader where
     put (HoHeader aa ab ac ad ae) = do
@@ -140,7 +140,7 @@ instance Data.Binary.Binary HoHeader where
     ac <- get
     ad <- get
     ae <- get
-    return (HoHeader aa ab ac ad ae)
+    pure (HoHeader aa ab ac ad ae)
 
 instance Data.Binary.Binary HoIDeps where
     put (HoIDeps aa ab ac ad) = do
@@ -153,7 +153,7 @@ instance Data.Binary.Binary HoIDeps where
     ab <- get
     ac <- get
     ad <- get
-    return (HoIDeps aa ab ac ad)
+    pure (HoIDeps aa ab ac ad)
 
 instance Data.Binary.Binary HoLib where
     put (HoLib aa ab ac ad) = do
@@ -166,7 +166,7 @@ instance Data.Binary.Binary HoLib where
     ab <- get
     ac <- get
     ad <- get
-    return (HoLib aa ab ac ad)
+    pure (HoLib aa ab ac ad)
 
 instance Data.Binary.Binary HoTcInfo where
     put (HoTcInfo aa ab ac ad ae af ag ah) = do
@@ -187,7 +187,7 @@ instance Data.Binary.Binary HoTcInfo where
     af <- get
     ag <- get
     ah <- get
-    return (HoTcInfo aa ab ac ad ae af ag ah)
+    pure (HoTcInfo aa ab ac ad ae af ag ah)
 
 instance Data.Binary.Binary HoBuild where
     put (HoBuild aa ab ac) = do
@@ -198,4 +198,4 @@ instance Data.Binary.Binary HoBuild where
     aa <- get
     ab <- get
     ac <- get
-    return (HoBuild aa ab ac)
+    pure (HoBuild aa ab ac)

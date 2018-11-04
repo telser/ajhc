@@ -31,7 +31,7 @@ devolveTransform = transformParms {
 devolveGrin :: Grin -> IO Grin
 devolveGrin grin = do
     col <- newIORef []
-    let g (n,l :-> r) = f r >>= \r -> return (n,l :-> r)
+    let g (n,l :-> r) = f r >>= \r -> pure (n,l :-> r)
         f lt@Let { expDefs = defs, expBody = body, .. } = do
             let iterZ :: Bool -> Map.Map Tag (Set.Set Val) -> [FuncDef] -> Map.Map Tag (Set.Set Val)
                 iterZ b pmap (fd@FuncDef { funcDefName = name, funcDefBody = as :-> r }:fs) = iterZ (b || xs' /= xs) (Map.insert name xs pmap) fs where
@@ -49,7 +49,7 @@ devolveGrin grin = do
                     | otherwise = Right fd { funcDefBody = as :-> pr }
                   where xs = maybe [] Set.toList $ Map.lookup name pmap
                         pr = runIdentity $ proc r
-                proc (App a as t) | Just xs <- Map.lookup a pmap = return (App a (as ++ Set.toList xs) t)
+                proc (App a as t) | Just xs <- Map.lookup a pmap = pure (App a (as ++ Set.toList xs) t)
                 proc e = mapExpExp proc e
             --mapM_ print (Map.toList pmap)
             nmaps <- mapM (g . fst) nmaps
@@ -59,9 +59,9 @@ devolveGrin grin = do
     nf <- mapM g (grinFuncs grin)
     lf <- readIORef col
     let ntenv = extendTyEnv [ createFuncDef False x y | (x,y) <- lf ] (grinTypeEnv grin)
-    return $  setGrinFunctions (lf ++ nf) grin { grinPhase = PostDevolve, grinTypeEnv = ntenv }
-    --if null lf then return ng else devolveGrin ng
-    --if null lf then return ng else devolveGrin ng
+    pure $  setGrinFunctions (lf ++ nf) grin { grinPhase = PostDevolve, grinTypeEnv = ntenv }
+    --if null lf then pure ng else devolveGrin ng
+    --if null lf then pure ng else devolveGrin ng
 
 -- twiddle does some final clean up before translation to C
 -- it replaces unused arguments with 'v0' and adds GC notations
@@ -79,7 +79,7 @@ runR (R x) = fst $ evalRWS x Env { envRoots = mempty, envMap = mempty, envVar = 
 
 class Twiddle a where
     twiddle :: a -> R a
-    twiddle a = return a
+    twiddle a = pure a
 
 instance Twiddle Exp where
     twiddle = twiddleExp
@@ -97,28 +97,28 @@ twiddleExp e = f e where
         roots <- asks envRoots
         let nroots = Set.fromList [ Var v t | (v,t) <- Set.toList (freeVars (if isUsing x then ([] :-> x :>>= lam) else lam)), isNode t, v > v0] Set.\\ roots
         local (\e -> e { envRoots = envRoots e `Set.union` nroots}) $ do
-            ne <- return (:>>=) `ap` twiddle x `ap` twiddle lam
-            return $ gcRoots (Set.toList nroots) ne
-    f (x :>>= lam) = return (:>>=) `ap` twiddle x `ap` twiddle lam
+            ne <- pure (:>>=) `ap` twiddle x `ap` twiddle lam
+            pure $ gcRoots (Set.toList nroots) ne
+    f (x :>>= lam) = pure (:>>=) `ap` twiddle x `ap` twiddle lam
     f l@Let {} = do
         ds <- twiddle (expDefs l)
         b <- twiddle (expBody l)
         roots <- asks envRoots
         let nroots = Set.fromList [ Var v t | (v,t) <- Set.toList (freeVars l), isNode t, v > v0] Set.\\ roots
-        return $ gcRoots (Set.toList nroots) (updateLetProps $ l { expDefs = ds, expBody = b })
+        pure $ gcRoots (Set.toList nroots) (updateLetProps $ l { expDefs = ds, expBody = b })
     f (App a vs t) | fopts FO.Jgc = do
         roots <- asks envRoots
         let nroots = Set.fromList [ Var v t | x <- vs, (v,t) <- Set.toList (freeVars x), isNode t, v > v0] Set.\\ roots
         local (\e -> e { envRoots = envRoots e `Set.union` nroots}) $ do
-            ne <- return (App a) `ap` mapM twiddleVal vs `ap` return t
-            return $ gcRoots (Set.toList nroots) ne
-    f (Case v as) = return Case `ap` twiddle v `ap` twiddle as
+            ne <- pure (App a) `ap` mapM twiddleVal vs `ap` pure t
+            pure $ gcRoots (Set.toList nroots) ne
+    f (Case v as) = pure Case `ap` twiddle v `ap` twiddle as
     f x | fopts FO.Jgc && isUsing x && isAllocing x = do
         roots <- asks envRoots
         let nroots = Set.fromList [ Var v t | (v,t) <- Set.toList (freeVars x), isNode t, v > v0] Set.\\ roots
         local (\e -> e { envRoots = envRoots e `Set.union` nroots}) $ do
             ne <- mapExpVal twiddleVal x
-            return $ gcRoots (Set.toList nroots) ne
+            pure $ gcRoots (Set.toList nroots) ne
     f n = do e <- mapExpVal twiddleVal n ; mapExpExp twiddle e
 
     isUsing (BaseOp StoreNode {} _) = True
@@ -152,7 +152,7 @@ instance Twiddle Lam where
         (y,uv) <- censor (Set.filter (`notElem` fvs)) $ listen (twiddle y)
         let fvp' = Map.fromList $ concatMap (\v -> if v `Set.member` uv then [] else [(v,v0)]) fvs
         vs <- censor (const mempty) . local (\e -> e { envMap = fvp' }) $ twiddle vs
-        return (vs :-> y)
+        pure (vs :-> y)
 --    twiddle (vs :-> y) = do
 --        cv <- asks envVar
 --        let fvp = Map.fromList $ zip fvs [cv ..]
@@ -161,7 +161,7 @@ instance Twiddle Lam where
 --        (y,uv) <- censor (Set.filter (`notElem` take (length fvs) [cv .. ])) $ listen (twiddle y)
 --        let fvp' = fmap (\v -> if v `Set.member` uv then v else v0) fvp
 --        vs <- censor (const mempty) . local (\e -> e { envMap = fvp' }) $ twiddle vs
---        return (vs :-> y)
+--        pure (vs :-> y)
 
 twiddleGrin grin = grinFunctions_s fs' grin where
     fs' = runR . twiddle  $ grinFunctions grin
@@ -173,6 +173,6 @@ twiddleVal x = f x where
     f var@(Var v ty) = do
         em <- asks envMap
         case Map.lookup v em of
-            Just n -> tell (Set.singleton n) >> return (Var n ty)
-            Nothing -> tell (Set.singleton v) >> return var
+            Just n -> tell (Set.singleton n) >> pure (Var n ty)
+            Nothing -> tell (Set.singleton v) >> pure var
     f x = mapValVal f x

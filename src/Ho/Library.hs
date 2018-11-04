@@ -105,14 +105,14 @@ fetchAllLibraries = ans where
         (bynames',byhashes') <- unzip `fmap` concatMapM f (optHlPath options)
         let bynames = Map.map (reverse . sortBy libVersionCompare) $ Map.unionsWith (++) bynames'
             byhashes = Map.unions byhashes'
-        return (bynames,byhashes)
+        pure (bynames,byhashes)
     f fp = do
-        fs <- flip iocatch (\_ -> return [] ) $ getDirectoryContents fp
+        fs <- flip iocatch (\_ -> pure [] ) $ getDirectoryContents fp
         forM fs $ \e -> case reverse e of
-            ('l':'h':'.':r)  -> flip iocatch (\_ -> return mempty) $ do
+            ('l':'h':'.':r)  -> flip iocatch (\_ -> pure mempty) $ do
                 lib <- readHlFile  (fp ++ "/" ++ e)
-                return (Map.singleton (libBaseName lib) [lib], Map.singleton (libHash lib) lib)
-            _               -> return mempty
+                pure (Map.singleton (libBaseName lib) [lib], Map.singleton (libHash lib) lib)
+            _               -> pure mempty
 
 splitOn' :: (a -> Bool) -> [a] -> [[a]]
 splitOn' f xs = split xs
@@ -133,11 +133,11 @@ collectLibraries libs = ans where
         let f (pn,vrs) = lname pn vrs `mplus` lhash pn vrs where
                 lname pn vrs = do
                     xs <- Map.lookup (packString pn) bynames
-                    (x:_) <- return $ filter isGood xs
-                    return x
+                    (x:_) <- pure $ filter isGood xs
+                    pure x
                 isGood lib = versionBranch vrs `isPrefixOf` versionBranch (libVersion lib)
                 lhash pn vrs = do
-                    [] <- return $ versionBranch vrs
+                    [] <- pure $ versionBranch vrs
                     Map.lookup pn byhashes'
             byhashes' = Map.fromList [ (show x,y) | (x,y) <- Map.toList byhashes]
         let es' = [ (x,f $ splitVersion x) | x <- libs ]
@@ -149,7 +149,7 @@ collectLibraries libs = ans where
             exitFailure
 
         checkForModuleConficts es
-        let f lmap _ [] = return lmap
+        let f lmap _ [] = pure lmap
             f lmap lset ((ei,l):ls)
                 | libHash l `Set.member` lset = f lmap lset ls
                 | otherwise = case Map.lookup (libBaseName l) lmap of
@@ -162,7 +162,7 @@ collectLibraries libs = ans where
         when verbose $ forM_ (Map.toList finalmap) $ \ (n,(e,l)) ->
             printf "-- Base: %s Exported: %s Hash: %s Name: %s\n" (unpackPS n) (show e) (show $ libHash l) (libName l)
 
-        return ([ l | (True,l) <- Map.elems finalmap ],[ l | (False,l) <- Map.elems finalmap ])
+        pure ([ l | (True,l) <- Map.elems finalmap ],[ l | (False,l) <- Map.elems finalmap ])
 
     checkForModuleConficts ms = do
         let mbad = Map.toList $ Map.filter (\c -> case c of [_] -> False; _ -> True)  $ Map.fromListWith (++) [ (m,[l]) | l <- ms, m <- fst $ libModules l]
@@ -186,7 +186,7 @@ parseLibraryDescription fs =  g [] (lines (f [] fs)) where
     g rs (r:ss) | (':':bd') <- bd = g ((map toLower $ condenseWhitespace nm,condenseWhitespace bd'):rs) ss
          | otherwise = fail $ "could not find ':' marker: " ++ show (rs,r:ss) where
             (nm,bd) = break (== ':') r
-    g rs [] = return rs
+    g rs [] = pure rs
 
 condenseWhitespace xs =  reverse $ dropWhile isSpace (reverse (dropWhile isSpace (cw xs))) where
     cw (x:y:zs) | isSpace x && isSpace y = cw (' ':zs)
@@ -248,12 +248,12 @@ readDescFile fp = do
             when verbose2 $ do
                 yaml <- emitYaml desc
                 putStrLn yaml
-            return $ procYaml desc
+            pure $ procYaml desc
         doCabal = do
             fc <- readFile fp
             case parseLibraryDescription fc of
                 Left err -> fail $ "Error reading library description file: " ++ show fp ++ " " ++ err
-                Right ps -> return $ procCabal ps
+                Right ps -> pure $ procCabal ps
     case FP.splitExtension fp of
         (_,".cabal") -> doCabal
         (_,".yaml") -> doYaml options

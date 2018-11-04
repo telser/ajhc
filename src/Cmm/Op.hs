@@ -182,15 +182,15 @@ data Ty
 
 preadTy :: P.ReadP Ty
 preadTy = P.choice cs where
-    cs = [ do P.string "bool"; return TyBool
-         , do P.char 's'; TyBits x _ <- preadTy; return $ TyBits x HintSigned
-         , do P.char 'u'; TyBits x _ <- preadTy; return $ TyBits x HintUnsigned
-         , do P.char 'f'; TyBits x _ <- preadTy; return $ TyBits x HintFloat
-         , do P.char 'c'; TyBits x _ <- preadTy; return $ TyBits x HintCharacter
-         , do P.string "bits<"; x <- P.manyTill P.get (P.char '>'); return $ TyBits (f x) HintNone
-         , do P.string "bits"; x <- readDecP; return $ TyBits (Bits x) HintNone
-         , do n <- readDecP; P.char '*'; t <- preadTy; return (TyVector n t)
-         , do P.string "i"; t <- preadTy; return (TyComplex t)
+    cs = [ do P.string "bool"; pure TyBool
+         , do P.char 's'; TyBits x _ <- preadTy; pure $ TyBits x HintSigned
+         , do P.char 'u'; TyBits x _ <- preadTy; pure $ TyBits x HintUnsigned
+         , do P.char 'f'; TyBits x _ <- preadTy; pure $ TyBits x HintFloat
+         , do P.char 'c'; TyBits x _ <- preadTy; pure $ TyBits x HintCharacter
+         , do P.string "bits<"; x <- P.manyTill P.get (P.char '>'); pure $ TyBits (f x) HintNone
+         , do P.string "bits"; x <- readDecP; pure $ TyBits (Bits x) HintNone
+         , do n <- readDecP; P.char '*'; t <- preadTy; pure (TyVector n t)
+         , do P.string "i"; t <- preadTy; pure (TyComplex t)
          ]
     f "ptr" = BitsArch BitsPtr
     f "max" = BitsArch BitsMax
@@ -200,7 +200,7 @@ preadTy = P.choice cs where
 readTy :: Monad m => String -> m Ty
 readTy s = case runReadP preadTy s of
     Nothing -> fail "readTy: not type"
-    Just x -> return x
+    Just x -> pure x
 
 stringToOpTy ::  String -> Ty
 stringToOpTy s = case readTy s of
@@ -225,8 +225,8 @@ instance ToCmmTy String where
     toCmmTy s = readTy s
 
 cmmTyBits :: ToCmmTy a => a -> Maybe Int
-cmmTyBits x = do TyBits (Bits b) _ <- toCmmTy x; return b
-cmmTyHint x = do TyBits _ hint <- toCmmTy x; return hint
+cmmTyBits x = do TyBits (Bits b) _ <- toCmmTy x; pure b
+cmmTyHint x = do TyBits _ hint <- toCmmTy x; pure hint
 
 instance Show TyHint where
     showsPrec _ HintSigned = ('s':)
@@ -298,19 +298,19 @@ isCommutable x = f x where
     f _ = False
 
 commuteBinOp :: BinOp -> Maybe BinOp
-commuteBinOp x | isCommutable x = return x
-commuteBinOp Lt = return Gt
-commuteBinOp Gt = return Lt
-commuteBinOp Lte = return Gte
-commuteBinOp Gte = return Lte
-commuteBinOp ULt = return UGt
-commuteBinOp UGt = return ULt
-commuteBinOp ULte = return UGte
-commuteBinOp UGte = return ULte
-commuteBinOp FLt = return FGt
-commuteBinOp FGt = return FLt
-commuteBinOp FLte = return FGte
-commuteBinOp FGte = return FLte
+commuteBinOp x | isCommutable x = pure x
+commuteBinOp Lt = pure Gt
+commuteBinOp Gt = pure Lt
+commuteBinOp Lte = pure Gte
+commuteBinOp Gte = pure Lte
+commuteBinOp ULt = pure UGt
+commuteBinOp UGt = pure ULt
+commuteBinOp ULte = pure UGte
+commuteBinOp UGte = pure ULte
+commuteBinOp FLt = pure FGt
+commuteBinOp FGt = pure FLt
+commuteBinOp FLte = pure FGte
+commuteBinOp FGte = pure FLte
 commuteBinOp _ = Nothing
 
 isAssociative :: BinOp -> Bool
@@ -324,30 +324,30 @@ isAssociative x = f x where
 
 unopFloat :: Ty -> UnOp -> Maybe String
 unopFloat (TyBits b HintFloat) op = g b =<< f op where
-    g (Bits 64) x = return x
-    g (Bits 32) x = return $ x ++ "f"
+    g (Bits 64) x = pure x
+    g (Bits 32) x = pure $ x ++ "f"
     g _ _ = Nothing
-    f FAbs = return "fabs"
-    f Sin  = return "sin"
-    f Cos  = return "cos"
-    f Tan  = return "tan"
-    f Sinh  = return "sinh"
-    f Cosh  = return "cosh"
-    f Tanh  = return "tanh"
-    f Asin  = return "asin"
-    f Acos  = return "acos"
-    f Atan  = return "atan"
-    f Sqrt = return "sqrt"
-    f Log = return "log"
-    f Exp = return "exp"
+    f FAbs = pure "fabs"
+    f Sin  = pure "sin"
+    f Cos  = pure "cos"
+    f Tan  = pure "tan"
+    f Sinh  = pure "sinh"
+    f Cosh  = pure "cosh"
+    f Tanh  = pure "tanh"
+    f Asin  = pure "asin"
+    f Acos  = pure "acos"
+    f Atan  = pure "atan"
+    f Sqrt = pure "sqrt"
+    f Log = pure "log"
+    f Exp = pure "exp"
 
     f _ = Nothing
 unopFloat _ _ = Nothing
 
 binopFunc :: Ty -> Ty -> BinOp -> Maybe String
 binopFunc (TyBits b _) _ bop = g b =<< f bop where
-    g (Bits 64) x = return x
-    g (Bits 32) x = return $ x ++ "f"
+    g (Bits 64) x = pure x
+    g (Bits 32) x = pure $ x ++ "f"
     g _ _ = Nothing
     f FPwr = Just "pow"
     f FAtan2 = Just "atan2"

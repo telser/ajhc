@@ -86,13 +86,13 @@ newFixer :: MonadIO m => m Fixer
 newFixer = liftIO $ do
     v <- newIORef []
     t <- newIORef Set.empty
-    return Fixer { vars = v, todo = t }
+    pure Fixer { vars = v, todo = t }
 
 newtype Rule = Rule { unRule :: IO () }
     deriving(Typeable)
 
 instance Monoid Rule where
-    mempty = Rule (return ())
+    mempty = Rule (pure ())
     mappend (Rule a) (Rule b) = Rule (a >> b)
     mconcat rs = Rule $ sequence_ $ map unRule rs
 
@@ -144,7 +144,7 @@ newValue fixer@Fixer { vars = vars } v = liftIO $ do
         rv =  RvValue { ident = ident, fixer = fixer, current = current, pending = pending, action = action }
     modifyIORef vars (MkFixable rv:)
     propagateValue v rv
-    return value
+    pure value
 
 addAction :: Fixable a => Value a -> (a -> IO ())  -> IO ()
 addAction (ConstValue n) act = act n
@@ -169,7 +169,7 @@ modifiedSuperSetOf :: (Fixable a, Fixable b) =>  Value b -> Value a -> (a -> b) 
 modifiedSuperSetOf (IV rv) (ConstValue cv) r = Rule $ propagateValue (r cv) rv
 modifiedSuperSetOf (IV rv) v2 r = Rule $ addAction v2 (\x -> propagateValue (r x) rv)
 modifiedSuperSetOf (IOValue iov) v2 r = Rule $ iov >>= \v1 -> unRule $ modifiedSuperSetOf v1 v2 r
-modifiedSuperSetOf (ConstValue vb) (ConstValue va)  f | f va `lte` vb =  Rule $ return ()
+modifiedSuperSetOf (ConstValue vb) (ConstValue va)  f | f va `lte` vb =  Rule $ pure ()
 modifiedSuperSetOf ca@ConstValue {}  cb _ =  Rule $ fail ("Fixer.modifedSuperSetOf: You cannot modify a constant value:" ++ show(ca,cb))
 modifiedSuperSetOf UnionValue {} _ _ =  Rule $ fail "Fixer: You cannot modify a union value"
 
@@ -177,20 +177,20 @@ isSuperSetOf :: Fixable a => Value a -> Value a -> Rule
 (IV rv) `isSuperSetOf` (ConstValue v2) = Rule $ propagateValue v2 rv
 (IV rv) `isSuperSetOf` v2 = Rule $ addAction v2 (\x -> propagateValue x rv)
 (IOValue iov) `isSuperSetOf` v2 = Rule $ iov >>= unRule . (`isSuperSetOf` v2)
-ConstValue v1 `isSuperSetOf` ConstValue v2 | v2 `lte` v1 =  Rule $ return ()
+ConstValue v1 `isSuperSetOf` ConstValue v2 | v2 `lte` v1 =  Rule $ pure ()
 ConstValue {} `isSuperSetOf` _ = Rule $  fail "Fixer.isSuperSetOf: You cannot modify a constant value"
 UnionValue {} `isSuperSetOf` _ = Rule $  fail "Fixer: You cannot modify a union value"
 
 -- | the function must satisfy the rule that if a >= b then f(a) implies f(b)
 conditionalRule :: Fixable a => (a -> Bool) -> Value a -> Rule -> Rule
-conditionalRule cond v (Rule act) = Rule $ addAction v (\x -> if cond x then act else return ())
+conditionalRule cond v (Rule act) = Rule $ addAction v (\x -> if cond x then act else pure ())
 
 dynamicRule  :: Fixable a =>  Value a -> (a -> Rule) -> Rule
 dynamicRule v dr = Rule $ addAction v (unRule . dr)
 
 propagateValue :: Fixable a => a -> RvValue a -> IO ()
 propagateValue p v = do
-    if isBottom p then return () else do
+    if isBottom p then pure () else do
     (modifyIORef (todo $ fixer v) (Set.insert $ MkFixable v))
     modifyIORef (pending v) (lub p)
 
@@ -200,21 +200,21 @@ readValue (IV v) = liftIO $ do
     findFixpoint Nothing (fixer v)
     readIORef (current v)
 readValue (IOValue iov) = liftIO iov >>= readValue
-readValue (ConstValue v) = return v
+readValue (ConstValue v) = pure v
 readValue (UnionValue a b) = liftIO $ do
     a' <- readValue a
     b' <- readValue b
-    return (lub a' b')
+    pure (lub a' b')
 
 readRawValue :: (Fixable a,MonadIO m) => Value a -> m a
 readRawValue (IV v) = liftIO $ do
     readIORef (current v)
 readRawValue (IOValue iov) = liftIO iov >>= readRawValue
-readRawValue (ConstValue v) = return v
+readRawValue (ConstValue v) = pure v
 readRawValue (UnionValue a b) = liftIO $ do
     a' <- readRawValue a
     b' <- readRawValue b
-    return (lub a' b')
+    pure (lub a' b')
 
 calcFixpoint :: MonadIO m => String -> Fixer -> m ()
 calcFixpoint s fixer = findFixpoint (Just (s,stdout)) fixer
@@ -223,15 +223,15 @@ calcFixpoint s fixer = findFixpoint (Just (s,stdout)) fixer
 findFixpoint :: MonadIO m => Maybe (String,Handle) ->  Fixer -> m ()
 findFixpoint msh@(~(Just (mstring,_))) Fixer { vars = vars, todo = todo } = liftIO $ do
     to <- readIORef todo
-    if Set.null to then return () else do
+    if Set.null to then pure () else do
     vars <- readIORef vars
     let f [] !tl !n | n > 0, tl /= 0 = do
             vs <- readIORef todo
             writeIORef todo Set.empty
             mputStr "(" >> mputStr (show n) >> mputStr ")" >> mFlush
             f (Set.toList vs) (tl - 1) 0
-        f [] _ n | n > 0 = mputStr "[Aborting]\n" >> mFlush >> return ()
-        f [] _ _ = mputStr "\n" >> mFlush >> return ()
+        f [] _ n | n > 0 = mputStr "[Aborting]\n" >> mFlush >> pure ()
+        f [] _ _ = mputStr "\n" >> mFlush >> pure ()
         f (MkFixable v:vs) tl n = do
             p <- readIORef (pending v)
             c <- readIORef (current v)
@@ -247,10 +247,10 @@ findFixpoint msh@(~(Just (mstring,_))) Fixer { vars = vars, todo = todo } = lift
             mapM_ ($ diff) as
             f vs tl (n + 1)
         mputStr s = case msh of
-            Nothing -> return ()
+            Nothing -> pure ()
             Just (_,h) -> hPutStr h s
         mFlush = case msh of
-            Nothing -> return ()
+            Nothing -> pure ()
             Just (_,h) -> hFlush h
     mputStr $ "Finding fixpoint for " ++ mstring ++ ": " ++ "[" ++ show (Set.size to) ++ "]"
     mFlush

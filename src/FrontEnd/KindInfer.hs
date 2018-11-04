@@ -61,7 +61,7 @@ instance Binary KindEnv where
         a <- getMap
         b <- getMap
         c <- getMap
-        return KindEnv { kindEnv = a, kindEnvAssocs = b, kindEnvClasses = c }
+        pure KindEnv { kindEnv = a, kindEnvAssocs = b, kindEnvClasses = c }
 
 instance HasSize KindEnv where
     size KindEnv { kindEnv = env } = size env
@@ -109,13 +109,13 @@ findKind tv@(KVar Kindvar {kvarRef = r, kvarConstraint = con }) = liftIO $ do
     rt <- readIORef r
     case rt of
         Nothing
-            | con == KindStar -> writeIORef r (Just kindStar) >> return kindStar
-            | otherwise -> return tv
+            | con == KindStar -> writeIORef r (Just kindStar) >> pure kindStar
+            | otherwise -> pure tv
         Just t -> do
             t' <- findKind t
             writeIORef r (Just t')
-            return t'
-findKind tv = return tv
+            pure t'
+findKind tv = pure tv
 
 -- useful operations in the inference monad
 
@@ -124,7 +124,7 @@ runKI env (Ki ki) = (kienv >>= ki') where
     kienv = do
         env <- newIORef env
         varnum <- newIORef 0
-        return KiEnv {
+        pure KiEnv {
             kiSrcLoc = bogusASrcLoc,
             kiContext = [],
             kiEnv = env,
@@ -147,7 +147,7 @@ unify k1 k2 = do
     mgu k1 k2
 
 mgu :: Kind -> Kind -> Ki ()
-mgu (KBase a) (KBase b) | a == b = return ()
+mgu (KBase a) (KBase b) | a == b = pure ()
 mgu (Kfun a b) (Kfun a' b') = do
     unify a a'
     unify b b'
@@ -160,7 +160,7 @@ varBind :: Kindvar -> Kind -> Ki ()
 varBind u k = do
     k <- flattenKind k
     printRule $ "varBind:" <+> pprint u <+> text ":=" <+> pprint k
-    if k == KVar u then return () else do
+    if k == KVar u then pure () else do
     when (u `Set.member` freeVars k) $ addWarn OccursCheck $ "occurs check failed in kind inference: " ++ show u ++ " := " ++ show k
     v <- liftIO $ readIORef (kvarRef u)
     case v of
@@ -172,17 +172,17 @@ varBind u k = do
 zonkConstraint :: KindConstraint -> Kindvar -> Ki ()
 zonkConstraint nk mv = do
     let fk = mappend nk (kvarConstraint mv)
-    if fk == kvarConstraint mv then return () else do
+    if fk == kvarConstraint mv then pure () else do
         nref <- liftIO $ newIORef Nothing
         let nmv = mv { kvarConstraint = fk, kvarRef = nref }
         liftIO $ modifyIORef (kvarRef mv) (\Nothing -> Just $ KVar nmv)
 
-constrain KindAny k = return ()
-constrain KindStar        (KBase Star) = return ()
-constrain KindQuest       k@KBase {}  = kindCombine kindFunRet k >> return ()
+constrain KindAny k = pure ()
+constrain KindStar        (KBase Star) = pure ()
+constrain KindQuest       k@KBase {}  = kindCombine kindFunRet k >> pure ()
 constrain KindQuestQuest  (KBase KQuest) = fail "cannot constrain ? to be ??"
-constrain KindQuestQuest  k@KBase {}  = kindCombine kindArg k >> return ()
-constrain KindSimple (KBase Star) = return ()
+constrain KindQuestQuest  k@KBase {}  = kindCombine kindArg k >> pure ()
+constrain KindSimple (KBase Star) = pure ()
 constrain KindSimple (a `Kfun` b) = do
     a <- findKind a
     b <- findKind b
@@ -193,8 +193,8 @@ constrain con k = fail $ "constraining kind: " ++ show (con,k)
 
 flattenKind :: Kind -> Ki Kind
 flattenKind k = f' k where
-    f (a `Kfun` b) = return Kfun `ap` f' a `ap` f' b
-    f k = return k
+    f (a `Kfun` b) = pure Kfun `ap` f' a `ap` f' b
+    f k = pure k
     f' k = findKind k >>= f
 
 newKindVar :: KindConstraint -> Ki Kindvar
@@ -204,7 +204,7 @@ newKindVar con = do
     n <- readIORef vr
     writeIORef vr $! (n + 1)
     nr <- newIORef Nothing
-    return Kindvar { kvarUniq = n, kvarRef = nr, kvarConstraint = con }
+    pure Kindvar { kvarUniq = n, kvarRef = nr, kvarConstraint = con }
 
 lookupKind :: KindConstraint -> Name -> Ki Kind
 lookupKind con name = do
@@ -218,14 +218,14 @@ lookupKind con name = do
         Nothing -> do
             kv <- newKindVar con
             extendEnv mempty { kindEnv = Map.singleton name (KVar kv) }
-            return (KVar kv)
+            pure (KVar kv)
     where
       -- ?? and ? aren't *really* kinds
       f (KBase KQuestQuest) = liftM KVar $ newKindVar KindQuestQuest
       f (KBase KQuest)      = liftM KVar $ newKindVar KindQuest
-      f k@(KBase _)         = return k
+      f k@(KBase _)         = pure k
       f (Kfun k1 k2)        = liftM2 Kfun (f k1) (f k2)
-      f k@(KVar _)          = return k
+      f k@(KVar _)          = pure k
 
 extendEnv :: KindEnv -> Ki ()
 extendEnv newEnv = do
@@ -243,14 +243,14 @@ getConstructorKinds ke = kindEnv ke -- Map.fromList [ (toName TypeConstructor x,
 printRule :: String -> Ki ()
 printRule s
     | dump FD.KindSteps = liftIO $ putStrLn s
-    | otherwise = return ()
+    | otherwise = pure ()
 
 {-# NOINLINE kiDecls #-}
 kiDecls :: KindEnv -> [HsDecl] -> IO KindEnv
 kiDecls inputEnv classAndDataDecls = ans where
     ans = do
         ke <- run
-        return ke -- TODO (Map.fromList (concatMap kgAssocs kindGroups) `mappend` as))
+        pure ke -- TODO (Map.fromList (concatMap kgAssocs kindGroups) `mappend` as))
     run = runKI inputEnv $ withContext ("kiDecls: " ++ show (map getDeclName classAndDataDecls)) $ do
         kiInitClasses classAndDataDecls
         mapM_ kiDecl classAndDataDecls
@@ -264,7 +264,7 @@ postProcess ke = do
     mapM_ (flip varBind kindStar) defs
     kindEnv <- T.mapM flattenKind kindEnv
     kindEnvClasses <- T.mapM (mapM flattenKind) kindEnvClasses
-    return ke { kindEnvClasses = kindEnvClasses, kindEnv = kindEnv }
+    pure ke { kindEnvClasses = kindEnvClasses, kindEnv = kindEnv }
 
 kiType,kiType' :: Kind -> HsType -> Ki ()
 kiType' k t = do
@@ -314,7 +314,7 @@ kiType _ _ = error "KindInfer.kiType: bad."
 initTyVarBind HsTyVarBind { hsTyVarBindName = name, hsTyVarBindKind = kk } = do
     nk <- lookupKind KindSimple (toName TypeVal name)
     case kk of
-        Nothing -> return ()
+        Nothing -> pure ()
         Just kk -> unify nk (hsKindToKind kk)
 
 hsKindToKind (HsKindFn a b) = hsKindToKind a `Kfun` hsKindToKind b
@@ -384,7 +384,7 @@ kiInitDecl d = withSrcLoc (srcLoc d) (f d) where
         args <- mapM (\_ -> newKindVar KindAny) (hsClassHeadArgs hsDeclClassHead)
         extendEnv mempty { kindEnvClasses =
             Map.singleton (hsClassHead hsDeclClassHead) (map KVar args) }
-    f _ = return ()
+    f _ = pure ()
 kiDecl :: HsDecl -> Ki ()
 kiDecl d = withSrcLoc (srcLoc d) (f d) where
     varLike HsTyVar {} = True
@@ -442,7 +442,7 @@ kiDecl d = withSrcLoc (srcLoc d) (f d) where
         local (\e -> e { kiWhere = InClass }) $ mapM_ kiDecl sigsAndDefaults
     f HsDeclDeriving { hsDeclClassHead = ch } = checkInstance ch
     f HsInstDecl { hsDeclClassHead = ch } = checkInstance ch
-    f _ = return ()
+    f _ = pure ()
     checkInstance HsClassHead { .. } = do
         unless (all consLike hsClassHeadArgs) $
             addWarn InvalidDecl "Instance parameters must be of the form 'C v1 v2'"
@@ -577,21 +577,21 @@ hsAsstToPred _ _ = error "KindInfer.hsAsstToPred: bad."
 hsQualTypeToSigma kt qualType = hsQualTypeToType kt (Just []) qualType
 
 hsTypeToType :: Monad m => KindEnv -> HsType -> m Type
-hsTypeToType kt t = return $ unsafePerformIO $ runKI kt $
+hsTypeToType kt t = pure $ unsafePerformIO $ runKI kt $
                     do kv <- newKindVar KindAny
                        kiType (KVar kv) t
                        kt' <- postProcess =<< getEnv
                        hsTypeToType' kt' t
 
 hsTypeToType' :: Monad m => KindEnv -> HsType -> m Type
-hsTypeToType' kt t = return $ hoistType $ aHsTypeToType kt t -- (forallHoist t)
+hsTypeToType' kt t = pure $ hoistType $ aHsTypeToType kt t -- (forallHoist t)
 
 hsQualTypeToType :: Monad m =>
     KindEnv            -- ^ the kind environment
     -> Maybe [HsName]  -- ^ universally quantify free variables excepting those in list.
     -> HsQualType      -- ^ the type to convert
     -> m Sigma
-hsQualTypeToType kindEnv qs qualType = return $ hoistType $ tForAll quantOver ( ps' :=> t') where
+hsQualTypeToType kindEnv qs qualType = pure $ hoistType $ tForAll quantOver ( ps' :=> t') where
    newEnv = kiHsQualType kindEnv qualType
    --newEnv = kindEnv
    Just t' = hsTypeToType' newEnv (hsQualTypeType qualType)
@@ -620,6 +620,6 @@ hoistType t = f t where
         | TExists vs (ps :=> t) <- na = f $ TForAll vs (ps :=> TArrow t nb)
         | otherwise = TArrow na nb
 
-fromHsTyVar (HsTyVar v) = return v
+fromHsTyVar (HsTyVar v) = pure v
 fromHsTyVar (HsTyExpKind (Located _ t) _) = fromHsTyVar t
 fromHsTyVar _ = fail "fromHsTyVar"

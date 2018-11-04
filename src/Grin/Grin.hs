@@ -341,9 +341,9 @@ partialTag v c = case fromAtom v of
 
 tagUnfunction :: Monad m => Tag -> m (Int, Tag)
 tagUnfunction t
-    | tagIsSuspFunction t = return (0,tagFlipFunction t)
-    | tagIsFunction t = return (0,t)
-    | ('P':zs) <- t', (n@(_:_),'_':rs) <- span isDigit zs = return (read n, toAtom ('f':rs))
+    | tagIsSuspFunction t = pure (0,tagFlipFunction t)
+    | tagIsFunction t = pure (0,t)
+    | ('P':zs) <- t', (n@(_:_),'_':rs) <- span isDigit zs = pure (read n, toAtom ('f':rs))
     where t' = fromAtom t
 tagUnfunction _ = fail "Tag does not represent function"
 
@@ -362,11 +362,11 @@ tagIsSuspFunction t
     where t' = fromAtom t
 
 tagToFunction t
-    | 'F':xs <- t' = return $ toAtom $ 'f':xs
-    | 'B':xs <- t' = return $ toAtom $ 'b':xs
-    | 'f':_ <- t' = return t
-    | 'b':_ <- t' = return t
-    | 'P':is <- t', ('_':xs) <- dropWhile isDigit is = return $ toAtom $ 'f':xs
+    | 'F':xs <- t' = pure $ toAtom $ 'f':xs
+    | 'B':xs <- t' = pure $ toAtom $ 'b':xs
+    | 'f':_ <- t' = pure t
+    | 'b':_ <- t' = pure t
+    | 'P':is <- t', ('_':xs) <- dropWhile isDigit is = pure $ toAtom $ 'f':xs
     | otherwise = fail $ "Not Function: " ++ t'
     where t' = fromAtom t
 
@@ -418,18 +418,18 @@ isValUnknown _ = False
 -- Look up stuff in the typing environment.
 ---------
 
-findTyTy (TyEnv m) a | Just tyty <-  mlookup a m = return tyty
+findTyTy (TyEnv m) a | Just tyty <-  mlookup a m = pure tyty
 findTyTy (TyEnv m) a | ('Y':rs) <- fromAtom a, (ns,'_':rs) <- span isDigit rs  = case mlookup (toAtom ('T':rs)) m of
-    Just TyTy { tySlots = ts, tyReturn = n } -> return tyTy { tySlots = take (length ts - read ns) ts, tyReturn = n }
+    Just TyTy { tySlots = ts, tyReturn = n } -> pure tyTy { tySlots = take (length ts - read ns) ts, tyReturn = n }
     Nothing -> fail $ "findArgsType: " ++ show a
-findTyTy _ a | "@hole" `isPrefixOf` fromAtom a  = return tyTy { tySlots = [], tyReturn = [TyNode] }
+findTyTy _ a | "@hole" `isPrefixOf` fromAtom a  = pure tyTy { tySlots = [], tyReturn = [TyNode] }
 findTyTy _ a =  fail $ "findArgsType: " ++ show a
 
 findArgsType m a = liftM (\tyty -> (tySlots tyty,tyReturn tyty)) (findTyTy m a)
 
 findArgs m a = case findArgsType m a of
     Nothing -> fail $ "findArgs: " ++ show a
-    Just (as,_) -> return as
+    Just (as,_) -> pure as
 
 v0 = V 0
 v1 = V 1

@@ -75,29 +75,29 @@ convCombine _ _ _ _ _ = Nothing
 binOp :: Expression t e => BinOp -> Ty -> Ty -> Ty -> e -> e -> t -> Maybe e
 -- evaluate expressions at compile time if we can
 binOp bop t1 t2 tr e1 e2 str | Just (v1,t1) <- toConstant e1, Just (v2,t2) <- toConstant e2 = f bop v1 v2 where
-    f Add v1 v2 = return $ toExpression (v1 + v2) str
-    f Sub v1 v2 = return $ toExpression (v1 - v2) str
-    f Mul v1 v2 = return $ toExpression (v1 * v2) str
+    f Add v1 v2 = pure $ toExpression (v1 + v2) str
+    f Sub v1 v2 = pure $ toExpression (v1 - v2) str
+    f Mul v1 v2 = pure $ toExpression (v1 * v2) str
     f op v1 v2 | v2 /= 0, isJust ans = ans where
         ans = case op of
-            Div  -> return $ toExpression (v1 `div` v2) str
-            Mod  -> return $ toExpression (v1 `mod` v2) str
-            Quot -> return $ toExpression (v1 `quot` v2) str
-            Rem  -> return $ toExpression (v1 `rem` v2) str
-            UDiv -> return $ toExpression (v1 `div` v2) str
-            UMod -> return $ toExpression (v1 `mod` v2) str
-            FDiv -> return $ toExpression (v1 / v2) str
+            Div  -> pure $ toExpression (v1 `div` v2) str
+            Mod  -> pure $ toExpression (v1 `mod` v2) str
+            Quot -> pure $ toExpression (v1 `quot` v2) str
+            Rem  -> pure $ toExpression (v1 `rem` v2) str
+            UDiv -> pure $ toExpression (v1 `div` v2) str
+            UMod -> pure $ toExpression (v1 `mod` v2) str
+            FDiv -> pure $ toExpression (v1 / v2) str
             _ -> Nothing
-    f FMul v1 v2 = return $ toExpression (v1 * v2) str
-    f FAdd v1 v2 = return $ toExpression (v1 + v2) str
-    f FSub v1 v2 = return $ toExpression (v1 - v2) str
-    f FPwr v1 v2 = return $ toExpression (realToFrac (realToFrac v1 ** realToFrac v2 :: Double)) str
+    f FMul v1 v2 = pure $ toExpression (v1 * v2) str
+    f FAdd v1 v2 = pure $ toExpression (v1 + v2) str
+    f FSub v1 v2 = pure $ toExpression (v1 - v2) str
+    f FPwr v1 v2 = pure $ toExpression (realToFrac (realToFrac v1 ** realToFrac v2 :: Double)) str
 
-    f op v1 v2 | Just v <- Map.lookup op ops = return $ toBool (v1 `v` v2) where
+    f op v1 v2 | Just v <- Map.lookup op ops = pure $ toBool (v1 `v` v2) where
         ops = Map.fromList [(Lt,(<)), (Gt,(>)), (Lte,(<=)), (Gte,(>=)),
                (FLt,(<)), (FGt,(>)), (FLte,(<=)), (FGte,(>=)), (Eq,(==)),(NEq,(/=))]
 
-    f op v1 v2 | Just v <- Map.lookup op ops, v1 >= 0 && v2 >= 0 = return $ toBool (v1 `v` v2) where
+    f op v1 v2 | Just v <- Map.lookup op ops, v1 >= 0 && v2 >= 0 = pure $ toBool (v1 `v` v2) where
         ops = Map.fromList [(ULt,(<)), (UGt,(>)), (ULte,(<=)), (UGte,(>=))]
     f _ _ _ =  Nothing
 -- we normalize ops such that constants are always on the left side
@@ -110,79 +110,79 @@ binOp bop t1 t2 tr e1 e2 str = f bop e1 e2 where
 
     f op e1 e2 | Just (v,_) <- toConstant e2 = ans v where
         ans 0 = case op of
-            Shr  -> return e1
-            Shra -> return e1
-            Shl  -> return e1
-            Rotl -> return e1
-            Rotr -> return e1
-            Sub  -> return e1
-            FSub -> return e1
-            FPwr -> return one
+            Shr  -> pure e1
+            Shra -> pure e1
+            Shl  -> pure e1
+            Rotl -> pure e1
+            Rotr -> pure e1
+            Sub  -> pure e1
+            FSub -> pure e1
+            FPwr -> pure one
             _ -> Nothing
         ans 1 = case op of
-            Div -> return e1
-            Mod -> return zero
-            UDiv -> return e1
-            UMod -> return zero
-            Quot -> return e1
-            Rem  -> return zero
-            FPwr -> return e1
-            FDiv -> return e1
-            Mul  -> return e1
-            FMul  -> return e1
+            Div -> pure e1
+            Mod -> pure zero
+            UDiv -> pure e1
+            UMod -> pure zero
+            Quot -> pure e1
+            Rem  -> pure zero
+            FPwr -> pure e1
+            FDiv -> pure e1
+            Mul  -> pure e1
+            FMul  -> pure e1
             _ -> Nothing
         ans _ = Nothing
 
     f op e1 e2 | Just (v,t1) <- toConstant e1 = eans t1 v where
         eans t1 v1 = case op of
-            Eq  -> return $ caseEquals e2 (v1,t1) true false
-            NEq -> return $ caseEquals e2 (v1,t1) false true
+            Eq  -> pure $ caseEquals e2 (v1,t1) true false
+            NEq -> pure $ caseEquals e2 (v1,t1) false true
             _ -> ans t1 v1
         ans t1 0 = case op of
-            Shr  -> return zero
-            Shra -> return zero
-            Shl  -> return zero
-            Rotl -> return zero
-            Rotr -> return zero
-            And  -> return zero
-            Or   -> return e2
-            Xor  -> return e2
-            Add  -> return e2
-            Mul  -> return zero
-            UGt  -> return false
-            ULte -> return true
-            FAdd -> return e2
-            UGte -> return $ caseEquals e2 (0,t1) true false
-            ULt  -> return $ caseEquals e2 (0,t1) false true
+            Shr  -> pure zero
+            Shra -> pure zero
+            Shl  -> pure zero
+            Rotl -> pure zero
+            Rotr -> pure zero
+            And  -> pure zero
+            Or   -> pure e2
+            Xor  -> pure e2
+            Add  -> pure e2
+            Mul  -> pure zero
+            UGt  -> pure false
+            ULte -> pure true
+            FAdd -> pure e2
+            UGte -> pure $ caseEquals e2 (0,t1) true false
+            ULt  -> pure $ caseEquals e2 (0,t1) false true
             _ -> Nothing
         ans t1 1 = case op of
-            Mul  -> return e2
-            FMul -> return e2
-            UGt  -> return $ caseEquals e2 (0,t1) true false
+            Mul  -> pure e2
+            FMul -> pure e2
+            UGt  -> pure $ caseEquals e2 (0,t1) true false
             _ -> Nothing
         ans _ _ = Nothing
 
     f op e1 e2 | e1 `equalsExpression` e2, isJust ans = ans where
         ans = case op of
-            Eq    -> return true
-            NEq   -> return false
-            Lte   -> return true
-            Gte   -> return true
-            Lt    -> return false
-            Gt    -> return false
-            ULte  -> return true
-            UGte  -> return true
-            ULt   -> return false
-            UGt   -> return false
-            Sub   -> return zero
-            Xor   -> return zero
-            And   -> return e1
-            Or    -> return e1
+            Eq    -> pure true
+            NEq   -> pure false
+            Lte   -> pure true
+            Gte   -> pure true
+            Lt    -> pure false
+            Gt    -> pure false
+            ULte  -> pure true
+            UGte  -> pure true
+            ULt   -> pure false
+            UGt   -> pure false
+            Sub   -> pure zero
+            Xor   -> pure zero
+            And   -> pure e1
+            Or    -> pure e1
             _ -> Nothing
 
     f bop e1 e2 | isAssociative bop, Just (bop',t1',t2',tr',e1',e2',str') <- fromBinOp e1, bop == bop' = Just $
         createBinOp bop tr tr tr e1' (createBinOp bop tr tr tr e2' e2 str) str
-    f bop e1 e2 = Nothing -- return $ createBinOp bop t1 t2 tr e1 e2 str
+    f bop e1 e2 = Nothing -- pure $ createBinOp bop t1 t2 tr e1 e2 str
 
 binOp' :: Expression t e => BinOp -> Ty -> Ty -> Ty -> e -> e -> t -> e
 binOp' bop t1 t2 tr e1 e2 str =  case binOp bop t1 t2 tr e1 e2 str of
@@ -191,12 +191,12 @@ binOp' bop t1 t2 tr e1 e2 str =  case binOp bop t1 t2 tr e1 e2 str of
 
 unOp :: Expression t e => UnOp -> Ty -> Ty -> e -> t -> Maybe e
 unOp op t1 tr e str | Just (v,t) <- toConstant e = f op v where
-    f Neg v = return $ toExpression (negate v) str
-    f FNeg v = return $ toExpression (negate v) str
-    f FAbs v = return $ toExpression (abs v) str
-    f Sin v = return $ toExpression (realToFrac $ sin (realToFrac v :: Double)) str
-    f Cos v = return $ toExpression (realToFrac $ cos (realToFrac v :: Double)) str
-    f Tan v = return $ toExpression (realToFrac $ tan (realToFrac v :: Double)) str
-    f Sqrt v = return $ toExpression (realToFrac $ sqrt (realToFrac v :: Double)) str
+    f Neg v = pure $ toExpression (negate v) str
+    f FNeg v = pure $ toExpression (negate v) str
+    f FAbs v = pure $ toExpression (abs v) str
+    f Sin v = pure $ toExpression (realToFrac $ sin (realToFrac v :: Double)) str
+    f Cos v = pure $ toExpression (realToFrac $ cos (realToFrac v :: Double)) str
+    f Tan v = pure $ toExpression (realToFrac $ tan (realToFrac v :: Double)) str
+    f Sqrt v = pure $ toExpression (realToFrac $ sqrt (realToFrac v :: Double)) str
     f _ _ = Nothing
 unOp op t1 tr e str = Nothing

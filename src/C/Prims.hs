@@ -178,6 +178,6 @@ parseDotNetFFI s = ans where
     f ("ctor":rs) dn = g dn { primDotNet = DotNetCtor } rs
     f ("method":rs) dn = g dn { primDotNet = DotNetMethod } rs
     f _ _ = fail "invalid .NET ffi specification"
-    g dn ['[':rs] | (as,']':nm) <- span (/= ']') rs = return dn { primAssembly = packString as, primDotNetName = packString nm }
-    g dn [n] = return dn { primDotNetName = packString n }
+    g dn ['[':rs] | (as,']':nm) <- span (/= ']') rs = pure dn { primAssembly = packString as, primDotNetName = packString nm }
+    g dn [n] = pure dn { primDotNetName = packString n }
     g _ _ = fail "invalid .NET ffi specification"

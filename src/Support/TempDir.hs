@@ -36,7 +36,7 @@ data TempDir = TempDir {
 
 putLog :: String -> IO ()
 --putLog = putStrLn
-putLog _ = return ()
+putLog _ = pure ()
 
 cleanTempDir :: Bool -> IO ()
 cleanTempDir b = modifyIORef tdRef $ \x -> x { tempDirClean = b }
@@ -57,13 +57,13 @@ getTempDir :: IO FilePath
 getTempDir = do
     td <- readIORef tdRef
     case tempDirPath td of
-        Just fp -> return fp
+        Just fp -> pure fp
         Nothing -> do
             tmpdir <- getTemporaryDirectory
             fp <- createTempDirectory tmpdir "jhc_"
             putLog $ printf "Created work directory '%s'" fp
             writeIORef tdRef td { tempDirPath = Just fp }
-            return fp
+            pure fp
 
 addAtExit :: IO () -> IO ()
 addAtExit action = do
@@ -78,7 +78,7 @@ createTempFile (FP.normalise -> fp) = do
     (fp,h) <- openBinaryTempFile dir (if null fp then "temp.tmp" else fp)
     putLog $ printf "Created temporary file '%s'" fp
     addCleanup fp
-    return (fp,h)
+    pure (fp,h)
 
 -- make sure nothing is sneaky about the file path
 filePathSafe fp = FP.isRelative fp &&
@@ -98,7 +98,7 @@ fileInTempDir (FP.normalise -> fp) action = do
             let cp' = FP.normalise (cp </> p)
             addCleanup cp'
             f ps cp'
-        f [] _ = return ()
+        f [] _ = pure ()
     f (FP.splitPath dpart) ""
     --unless (null $ FP.normalise dpart) $
     --    fold (FP.splitPath dpart) $ addCleanup
@@ -106,14 +106,14 @@ fileInTempDir (FP.normalise -> fp) action = do
     let nfp = FP.normalise (tdir </> fp)
     b <- addCleanup fp
     when b $ action nfp
-    return $ noEscapePath nfp
+    pure $ noEscapePath nfp
 
 cleanUp :: IO ()
 cleanUp = do
     td <- readIORef tdRef
     sequence_ (tempDirAtExit td)
     if not (tempDirClean td) ||
-        isNothing (tempDirPath td) then return () else do
+        isNothing (tempDirPath td) then pure () else do
     dir <- getTempDir
     forM_ (reverse . Set.toList $ tempDirCleanup td) $ \fp -> do
         putLog $ printf "Removing '%s'" (dir </> fp)
@@ -125,9 +125,9 @@ cleanUp = do
 addCleanup :: FilePath -> IO Bool
 addCleanup fp = do
     td <- readIORef tdRef
-    if fp `Set.member` tempDirCleanup td then return False else do
+    if fp `Set.member` tempDirCleanup td then pure False else do
     writeIORef tdRef td { tempDirCleanup = fp `Set.insert` tempDirCleanup td }
-    return True
+    pure True
 
 wrapMain :: IO () -> IO ()
 wrapMain main = E.catch (main >> cleanUp) f where
@@ -140,7 +140,7 @@ wrapMain main = E.catch (main >> cleanUp) f where
         case tempDirPath td of
             Just td -> hPutStrLn stderr $
                 printf "Exiting abnormally. Work directory is '%s'" td
-            _ -> return ()
+            _ -> pure ()
         unless (null ss) $
             forM_ ("Stack:":ss) (hPutStrLn stderr)
         throwIO e
@@ -150,7 +150,7 @@ wrapMain main = E.catch (main >> cleanUp) f where
 -------------------
 
 ignoreError :: IO () -> IO ()
-ignoreError action = iocatch action (\_ -> return ())
+ignoreError action = iocatch action (\_ -> pure ())
 
 {-# NOINLINE tdRef #-}
 tdRef :: IORef TempDir
@@ -172,4 +172,4 @@ withStackStatus s action = do
     writeIORef stackRef (s:cs)
     r <- action
     writeIORef stackRef cs
-    return r
+    pure r

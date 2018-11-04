@@ -30,7 +30,7 @@ type HsName = Name
 instance Binary Module where
     get = do
         ps <- get
-        return (Module $ fromAtom ps)
+        pure (Module $ fromAtom ps)
     put (Module n) = put (toAtom n)
 
 instance HasLocation HsModule where

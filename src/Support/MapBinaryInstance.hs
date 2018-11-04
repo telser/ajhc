@@ -13,7 +13,7 @@ getMap :: (Binary k,Ord k,Binary v) => Get (Map.Map k v)
 getMap = do
         sz <- get :: Get Word32
         ls <- replicateM (fromIntegral sz) get
-        return (Map.fromList ls)
+        pure (Map.fromList ls)
 
 putSet :: (Binary a,Ord a) => Set.Set a -> Put
 putSet x = do
@@ -24,4 +24,4 @@ getSet :: (Binary a,Ord a) => Get (Set.Set a)
 getSet = do
         sz <- get :: Get Word32
         ls <- replicateM (fromIntegral sz) get
-        return (Set.fromList ls)
+        pure (Set.fromList ls)

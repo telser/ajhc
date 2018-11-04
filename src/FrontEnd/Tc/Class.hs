@@ -56,14 +56,14 @@ splitPreds :: Monad m
            -> m (Preds, Preds)
 splitPreds h fs ps  = do
     ps' <- toHnfs h ps
-    return $ partition (\p -> let fv = freeMetaVarsPred p in not (Set.null fv) && fv `Set.isSubsetOf` fs) $ simplify h ps'
+    pure $ partition (\p -> let fv = freeMetaVarsPred p in not (Set.null fv) && fv `Set.isSubsetOf` fs) $ simplify h ps'
 
 toHnfs      :: Monad m => ClassHierarchy -> [Pred] -> m [Pred]
-toHnfs h ps =  mapM (toHnf h) ps >>= return . concat
+toHnfs h ps =  mapM (toHnf h) ps >>= pure . concat
 
 toHnf :: Monad m => ClassHierarchy -> Pred -> m [Pred]
 toHnf h p
-    | inHnf p = return [p]
+    | inHnf p = pure [p]
     | otherwise =  case reducePred h p of
          Nothing -> fail $ "context reduction, no instance for: "  ++ (pprint  p)
          Just ps -> toHnfs h ps
@@ -81,9 +81,9 @@ inHnf (IsIn c t) = hnf t
        hnf TAssoc {} = True
 
 reducePred :: Monad m => ClassHierarchy -> Pred -> m [Pred]
-reducePred h p@(IsEq t1 t2) = fail "reducePred" -- return [p]
+reducePred h p@(IsEq t1 t2) = fail "reducePred" -- pure [p]
 reducePred h p@(IsIn c t)
-    | Just x <- foldr mplus Nothing poss = return x
+    | Just x <- foldr mplus Nothing poss = pure x
     | otherwise = fail "reducePred"
  where poss = map (byInst p) (instsOf h c)
 
@@ -111,7 +111,7 @@ bySuper h p@(IsIn c t)
 byInst             :: Monad m => Pred -> Inst -> m [Pred]
 byInst p Inst { instHead = ps :=> h } = do
     u <- matchPred h p
-    return (map (inst mempty (Map.fromList [ (tyvarName mv,t) | (mv,t) <- u ])) ps)
+    pure (map (inst mempty (Map.fromList [ (tyvarName mv,t) | (mv,t) <- u ])) ps)
 
 matchPred :: Monad m => Pred -> Pred -> m [(Tyvar,Type)]
 matchPred x@(IsIn c t) y@(IsIn c' t')
@@ -129,15 +129,15 @@ match x y = do match' x y
 match' (TAp l r) (TAp l' r') = do
     sl <- match l l'
     sr <- match r r'
-    return $ mappend sl sr
+    pure $ mappend sl sr
 match' (TArrow l r) (TArrow l' r') = do
     sl <- match l l'
     sr <- match r r'
-    return $ mappend sl sr
-match' (TVar u) (TVar t) | u == t = return mempty
-match' (TVar mv) t | getType mv == getType t = return [(mv,t)]
---match' (TMetaVar mv) t | kind mv == kind t = return [(mv,t)]
-match' (TCon tc1) (TCon tc2) | tc1==tc2 = return mempty
+    pure $ mappend sl sr
+match' (TVar u) (TVar t) | u == t = pure mempty
+match' (TVar mv) t | getType mv == getType t = pure [(mv,t)]
+--match' (TMetaVar mv) t | kind mv == kind t = pure [(mv,t)]
+match' (TCon tc1) (TCon tc2) | tc1==tc2 = pure mempty
 match' t1 t2  = fail $ "match: " ++ show (t1,t2)
 
 splitReduce :: Set.Set MetaVar -- ^ Meta vars from the environment
@@ -156,7 +156,7 @@ splitReduce fs gs ps = do
         wdump FD.BoxySteps $ liftIO $ putStrLn msg
         --addWarn "type-defaults" msg
     sequence_ [ varBind x y | (x,y) <- nub sub]
-    return (Set.toList gs Data.List.\\ map fst sub, ds, rs')
+    pure (Set.toList gs Data.List.\\ map fst sub, ds, rs')
 
 -- | Return retained predicates and a defaulting substitution
 genDefaults :: ClassHierarchy
@@ -184,7 +184,7 @@ assertEntailment qs ps = do
 --    liftIO $ putStrLn $ "Asserting entailment: " ++ pprint (qs,ps)
     ch <- getClassHierarchy
     let ns = [ p  | p <- ps, not $ entails ch qs p ]
-    if null ns then return () else
+    if null ns then pure () else
         fail $ "Signature too Weak: " ++ pprint qs ++ " does not imply " ++ pprint ns
 
 assertEquivalant :: Preds -> Preds -> Tc ()
@@ -198,7 +198,7 @@ reduce :: OptionMonad m => ClassHierarchy -> [Tyvar] -> [Tyvar] -> [Pred] -> m (
 reduce h fs gs ps = do
     (ds, rs) <- split h fs ps
     rs' <-   useDefaults h (fs++gs) rs
-    return (ds,rs')
+    pure (ds,rs')
 -}
 
 -- 'candidates' from THIH
@@ -224,8 +224,8 @@ topDefaults ps  = do
         tss = [ ts | (v,qs,ts) <- ams ]
         _vs  = [ v  | (v,qs,ts) <- ams ]
     when (any null tss) $ fail $ "Top Level ambiguity " ++ (pprint ps)
-    return ()
---      | otherwise    -> return $ Map.fromList (zip vs (map head tss))
+    pure ()
+--      | otherwise    -> pure $ Map.fromList (zip vs (map head tss))
 --        where ams = ambig h [] ps
 --              tss = [ ts | (v,qs,ts) <- ams ]
 --              vs  = [ v  | (v,qs,ts) <- ams ]

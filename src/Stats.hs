@@ -151,12 +151,12 @@ runStatM (StatM a s) = (a,s)
 {-# INLINE mticks #-}
 mtick k = mticks 1 k
 mtick' k = mticks' 1 k
-mticks 0 _ = return ()
+mticks 0 _ = pure ()
 mticks n k = let k' = toAtom k in k' `seq` n `seq` mticks' n k'
 
 instance MonadStats Identity where
-    mticks' _ _ = return ()
-    mtickStat _ = return ()
+    mticks' _ _ = pure ()
+    mtickStat _ = pure ()
 
 instance MonadReader r m => MonadReader r (StatT m) where
     ask = lift $ ask
@@ -179,7 +179,7 @@ singleStat n k = Stat $ IB.msingleton (fromAtom $ toAtom k) n
 null (Stat r) = IB.null r
 
 instance MonadStats IO where
-    mticks' 0 _ = return ()
+    mticks' 0 _ = pure ()
     mticks' n a = do
         p <- readIORef printStats
         when p (putStrLn $ (show a ++ ": " ++ show n))
@@ -218,7 +218,7 @@ clear (Stats h) = writeIORef h mempty
 
 toList (Stats r) = do
     Stat s <- readIORef r
-    return [(unsafeIntToAtom x,y) | (x,y) <- IB.toList s]
+    pure [(unsafeIntToAtom x,y) | (x,y) <- IB.toList s]
 
 isEmpty (Stats r) = null `liftM` readIORef r
 
@@ -237,7 +237,7 @@ runStatIO :: MonadIO m =>  Stats -> StatT m a -> m a
 runStatIO stats action = do
     (a,s) <- runStatT action
     liftIO $ tickStat stats s
-    return a
+    pure a
 
 readStat :: Stats -> IO Stat
 readStat (Stats r) = readIORef r

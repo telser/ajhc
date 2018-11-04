@@ -11,7 +11,7 @@ data Env b  = Env {-# UNPACK #-} !(IOArray Int b) {-# UNPACK #-} !(IOArray Int (
 newtype Ms b c = Ms' (Env b -> IO c)
 
 instance Monad (Ms b) where
-    return a = Ms' (\_ -> return a)
+    return a = Ms' (\_ -> pure a)
     Ms' comp >>= fun
         = Ms' (\v  -> comp v >>= \r -> case fun r   of Ms' x -> x v)
     Ms' a >> Ms' b = Ms' $ \v -> a v >> b v
@@ -39,10 +39,10 @@ solve :: (Eq b) => Maybe String -> b -> [Ms b b] -> IO [b]
 solve str' empty vs = do
     let put = case str' of
             Just _ -> putErrLn
-            Nothing -> const (return ())
+            Nothing -> const (pure ())
         put' = case str' of
             Just _ -> putErr
-            Nothing -> const (return ())
+            Nothing -> const (pure ())
         Just str = str'
     let len = length vs
     put $ "Finding Fixpoint for " ++ show len ++ " variables: " ++  str
@@ -50,12 +50,12 @@ solve str' empty vs = do
     ref <- newArray (0,len - 1) IntSet.empty
     let as = [ (i,(unMs' f) (Env arr ref i))  |  f <- vs | i <- [0..]]
         fna = listArray (0,len - 1) (snds as)
-    let li [] s | IntSet.null s  = return ()
+    let li [] s | IntSet.null s  = pure ()
         --li xs [] n = CharIO.putErr ("[" ++ show (I# n) ++ "]") >>   li xs xs 0#
         li [] s = do
             let g i = do
                     ds <- readArray ref i
-                    return (i,i,IntSet.toList ds)
+                    pure (i,i,IntSet.toList ds)
             ds <- mapM g (IntSet.toList s)
             let xs = flattenSCCs scc
                 scc =  stronglyConnComp ds
