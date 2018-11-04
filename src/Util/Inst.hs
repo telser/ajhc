@@ -4,8 +4,6 @@
 -- Useful instances that don't belong anywhere else.
 module Util.Inst() where
 
-import Control.Monad.Identity
-import Data.Monoid
 #if __GLASGOW_HASKELL__ <= 610
 import qualified Data.Map as Map
 import qualified Data.IntMap as IM

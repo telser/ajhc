@@ -3,9 +3,9 @@
 module Cmm.Op where
 
 import Data.Binary
-import Util.Gen
 import qualified Text.ParserCombinators.ReadP as P
 import Text.Read.Lex
+import Util.Gen
 
 {-
 

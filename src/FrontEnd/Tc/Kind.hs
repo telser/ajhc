@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module FrontEnd.Tc.Kind(
     Kind(..),
@@ -15,11 +16,11 @@ module FrontEnd.Tc.Kind(
     ) where
 
 import Control.Monad
-import Data.IORef
 import Data.Binary
+import Data.IORef
 
 import Doc.DocLike
-import Doc.PPrint(pprint,pprintPrec,pprintAssoc,Assoc(..),PPrint,pprintBinary)
+import Doc.PPrint (Assoc (..), PPrint, pprint, pprintAssoc, pprintBinary, pprintPrec)
 import Name.Name
 
 {-

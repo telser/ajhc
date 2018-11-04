@@ -1,6 +1,9 @@
 *.hi
 *.hl
 *.o
+*.dyn_hi
+*.dyn_hi-boot
+*.dyn_o
 *~
 /.ditz-config
 /ChangeLog

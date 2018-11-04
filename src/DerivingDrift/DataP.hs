@@ -1,17 +1,17 @@
 module DerivingDrift.DataP where
 
-import Name.Name(Name)
 import FrontEnd.HsSyn
+import Name.Name (Name)
 
 data Statement = DataStmt | NewTypeStmt
     deriving (Eq,Show)
 
 data Data = D {
-    name :: Name,		-- type name
+    name :: Name,                -- type name
     constraints :: [(Class,Var)],
-    vars :: [Var],		-- Parameters
+    vars :: [Var],                -- Parameters
     body :: [Body],
-    derives :: [Class],		-- derived classes
+    derives :: [Class],                -- derived classes
     statement :: Statement
     } deriving (Eq,Show)
 

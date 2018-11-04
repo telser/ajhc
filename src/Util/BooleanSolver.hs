@@ -213,9 +213,6 @@ processConstraints propagateSets (C cs) = mapM_ prule (cs []) where
             pure ()
         pure () :: IO ()
 
-
-
-
 data Result a =
     ResultJust {
         resultValue :: Bool
@@ -225,7 +222,6 @@ data Result a =
         resultLB ::[a],
         resultUB ::[a]
     }
-
 
 instance Functor Result where
     fmap f (ResultBounded x ys zs) = ResultBounded (f x) (map f ys) (map f zs)
@@ -238,8 +234,6 @@ showResult (ResultJust l) = show l
 showResult rb@ResultBounded {} = sb (resultLB rb) ++ " <= " ++ show (resultRep rb) ++ " <= " ++ sb (resultUB rb)   where
     sb n | null n = "_"
     sb n = show n
-
-
 
 collectVars (Cimplies x y:xs) = x:y:collectVars xs
 collectVars [] = []

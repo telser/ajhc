@@ -1,7 +1,6 @@
 module Util.Perhaps where
 
 import Data.Typeable
-import Data.Monoid
 
 data Perhaps = No | Maybe | Yes
     deriving(Show,Read,Typeable,Eq,Ord)
@@ -14,6 +13,3 @@ instance Monoid Perhaps where
     Yes `mappend` Yes = Yes
     No  `mappend` No  = No
     _   `mappend` _   = Maybe
-
-
-

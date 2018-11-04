@@ -19,7 +19,6 @@ module Util.Histogram(
     ) where
 
 import qualified Data.Map as Map
-import Data.Monoid
 import Data.Typeable
 import qualified Data.List as L
 

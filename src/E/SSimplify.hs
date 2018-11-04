@@ -12,12 +12,12 @@ module E.SSimplify(
     ) where
 
 import Control.Monad.Identity
+import Data.List hiding (delete, insert, union)
 import Data.Maybe
-import Data.Typeable
-import Debug.Trace
-import Data.List hiding(delete,union,insert)
 import qualified Data.Set as Set
 import qualified Data.Traversable as T
+import Data.Typeable
+import Debug.Trace
 
 import C.Prims
 import Cmm.Number
@@ -31,29 +31,29 @@ import E.Program
 import E.Rules
 import E.Subst
 --import E.Traverse(runRename)
+import qualified E.Demand as Demand
 import E.TypeCheck
 import E.Values
+import qualified FlagDump as FD
+import qualified FlagOpts as FO
 import GenUtil hiding (split)
+import qualified Info.Info as Info
 import Info.Types
 import Name.Id
 import Name.Name
 import Name.Names
 import Name.VConsts
 import Options
-import Stats hiding(null,new,print,Stats,singleton)
+import Stats hiding (Stats, new, null, print, singleton)
 import StringTable.Atom
 import Support.CanType
 import Support.FreeVars
 import Util.Graph
 import Util.HasSize
 import Util.NameMonad
-import Util.RWS hiding(Alt)
 import Util.ReaderWriter
+import Util.RWS hiding (Alt)
 import Util.SetLike as S
-import qualified E.Demand as Demand
-import qualified FlagDump as FD
-import qualified FlagOpts as FO
-import qualified Info.Info as Info
 
 --type Bind = (TVr,E)
 

@@ -5,14 +5,14 @@ module E.Type where
 
 import C.Prims
 import Cmm.Number
-import Doc.DocLike hiding((<$>))
+import Doc.DocLike hiding ((<$>))
+import qualified Info.Info as Info
 import Info.Types
 import Name.Id
 import Name.Name
 import Name.Names
 import StringTable.Atom
 import Util.Gen
-import qualified Info.Info as Info
 
 {- @Internals
 
@@ -147,7 +147,7 @@ data E = EAp E E
        eCaseDefault :: (Maybe E),
        eCaseAllFV  :: IdSet
        }
-	deriving(Eq, Ord)
+        deriving(Eq, Ord)
     {-! derive: is, from !-}
 
 --instance Functor (Lit e) where

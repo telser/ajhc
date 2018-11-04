@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Name.Id(
     Id(),
     IdMap(),
@@ -38,10 +39,10 @@ module Name.Id(
 import Control.Applicative
 import Control.Monad.Reader
 import Control.Monad.State
+import qualified Data.Binary as B
 import Data.Bits
 import Data.Int
-import qualified Data.Binary as B
-import qualified Data.IntMap  as IM
+import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 
 import Doc.DocLike
@@ -49,7 +50,7 @@ import Doc.PPrint
 import Name.Name
 import StringTable.Atom
 import Util.HasSize
-import Util.Inst()
+import Util.Inst ()
 import Util.NameMonad
 import Util.SetLike as S
 
@@ -173,8 +174,8 @@ newtype IdNameT m a = IdNameT (StateT (IdSet, IdSet) m a)
     deriving(Applicative, Alternative, Monad, MonadTrans, Functor, MonadFix, MonadPlus, MonadIO)
 
 instance (MonadReader r m) => MonadReader r (IdNameT m) where
-	ask       = lift ask
-	local f (IdNameT m) = IdNameT $ local f m
+        ask       = lift ask
+        local f (IdNameT m) = IdNameT $ local f m
 
 -- | Run the name monad transformer.
 runIdNameT :: (Monad m) => IdNameT m a -> m (a,IdSet)

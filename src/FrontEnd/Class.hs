@@ -1,4 +1,5 @@
-{-# LANGUAGE NoMonoLocalBinds, NamedFieldPuns #-}
+{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses, NamedFieldPuns, NoMonoLocalBinds,
+             RecordWildCards, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module FrontEnd.Class(
     printClassHierarchy,
@@ -29,16 +30,16 @@ module FrontEnd.Class(
     ) where
 
 import Control.Monad.Identity
-import Control.Monad.Writer(Monoid(..))
-import Data.Generics(mkQ,something)
-import Data.List(nub)
-import Data.Maybe
-import Debug.Trace
-import Text.PrettyPrint.HughesPJ(render,Doc())
-import Text.Printf
+import Control.Monad.Writer (Monoid (..))
+import Data.Generics (mkQ, something)
+import Data.List (nub)
 import qualified Data.List
 import qualified Data.Map as Map
+import Data.Maybe
+import Debug.Trace
+import Text.PrettyPrint.HughesPJ (Doc, render)
 import qualified Text.PrettyPrint.HughesPJ as PPrint
+import Text.Printf
 
 import Prelude hiding ((<$>))
 
@@ -59,7 +60,7 @@ import Support.FreeVars
 import Support.MapBinaryInstance
 import Support.Tickle
 import Util.Gen
-import Util.Inst()
+import Util.Inst ()
 
 type Assump = (Name,Sigma)
 
@@ -288,13 +289,13 @@ methodToTopDecls :: Monad m
     -> m (HsDecl,Assump)
 methodToTopDecls kt preds crecord qt (methodName, methodDecls) = do
     let (cntxt,(className,[argType])) = chToClassHead kt qt
-	newMethodName = instanceName methodName (getTypeHead argType)
+        newMethodName = instanceName methodName (getTypeHead argType)
     sigFromClass <- case [ s | (n, s) <- classAssumps crecord, n == methodName] of
-	    [x] -> return x
-	    _ -> fail $ "sigFromClass: " ++ (pprint className <+> pprint (classAssumps crecord))
-					  ++ " " ++ show  methodName
+            [x] -> return x
+            _ -> fail $ "sigFromClass: " ++ (pprint className <+> pprint (classAssumps crecord))
+                                          ++ " " ++ show  methodName
     let instantiatedSig = newMethodSig' kt methodName (preds ++ cntxt) sigFromClass argType
-	renamedMethodDecls = renameOneDecl newMethodName methodDecls
+        renamedMethodDecls = renameOneDecl newMethodName methodDecls
     return (renamedMethodDecls,(newMethodName, instantiatedSig))
 
 defaultMethodToTopDecls :: KindEnv -> [Assump] -> HsClassHead -> (Name, HsDecl) -> (HsDecl,Assump)

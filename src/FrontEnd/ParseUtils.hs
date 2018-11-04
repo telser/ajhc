@@ -12,7 +12,7 @@
 -- Utilities for the Haskell parser.
 --
 -----------------------------------------------------------------------------
-
+{-# LANGUAGE ViewPatterns #-}
 module FrontEnd.ParseUtils (
 	  splitTyConApp		-- HsType -> P (Name,[HsType])
 	, mkRecConstrOrUpdate	-- HsExp -> [HsFieldUpdate] -> P HsExp

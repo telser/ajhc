@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module E.Demand(
     Demand(..),
     DemandSignature(..),
@@ -10,9 +11,9 @@ module E.Demand(
     ) where
 
 import Control.Monad.Reader
-import Control.Monad.Writer hiding(Product(..), Alt)
+import Control.Monad.Writer hiding (Alt, Product (..))
 import Data.Binary
-import Data.List hiding(union,delete)
+import Data.List hiding (delete, union)
 import Data.Typeable
 
 --import Debug.Trace
@@ -22,11 +23,11 @@ import Doc.PPrint
 import E.E
 import E.Program
 import GenUtil
+import qualified Info.Info as Info
 import Info.Types
 import Name.Id
 import Util.HasSize
 import Util.SetLike
-import qualified Info.Info as Info
 
 trace _ x = x
 

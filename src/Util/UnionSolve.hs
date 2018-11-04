@@ -12,7 +12,6 @@ module Util.UnionSolve(
 
 import Control.Monad(unless, forM_)
 import Data.List(intersperse)
-import Data.Monoid
 import qualified Data.Foldable as S
 import qualified Data.Map as Map
 import qualified Data.Sequence as S

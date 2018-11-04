@@ -1,17 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses, OverloadedStrings, RecordWildCards #-}
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module C.Prims where
 
 import Data.Binary
-import Data.Monoid(Monoid(..))
-import Data.Typeable
+import Data.Monoid (Monoid (..))
 import qualified Data.Set as Set
+import Data.Typeable
 
+import qualified Cmm.Op as Op
 import Doc.DocLike
 import Doc.PPrint
 import PackedString
 import StringTable.Atom
-import qualified Cmm.Op as Op
 
 import GHC.Exts
 
@@ -56,7 +56,7 @@ data Prim =
         funcName :: !PackedString,
         primArgTypes :: [ExtType],
         primRetType :: ExtType,
-	primRetArgs :: [ExtType],
+        primRetArgs :: [ExtType],
         primSafety  :: Safety
         }   -- function call with C calling convention
     | IFunc {

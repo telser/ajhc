@@ -1,9 +1,9 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Util.NameMonad(NameMonad(..),GenName(..),NameMT,runNameMT,runNameMT',freeNames,mixInt,mixInt3,hashInt) where
 
 import Control.Applicative (Alternative(..))
 import Control.Monad.State
 import Data.Bits
-import Data.Word
 import qualified Data.Set as Set
 
 -- | There are bound names and used names, the used names are always a superset of the bound names.

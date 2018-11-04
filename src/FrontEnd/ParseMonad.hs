@@ -28,8 +28,6 @@ module FrontEnd.ParseMonad(
 	) where
 
 import Control.Monad
-import Data.Functor
-import Data.Monoid
 import qualified Control.Applicative as A
 import qualified Data.Set as Set
 

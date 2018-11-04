@@ -13,7 +13,7 @@ import Util.HasSize
 import Util.SetLike
 
 annotateCombs :: forall m . Monad m =>
-    (IdMap (Maybe E))
+    IdMap (Maybe E)
     -> (Id -> Info -> m Info)   -- ^ annotate based on Id map
     -> (E -> Info -> m Info)    -- ^ annotate letbound bindings
     -> (E -> Info -> m Info)    -- ^ annotate lambdabound bindings
@@ -27,8 +27,8 @@ annotateCombs imap idann letann lamann cs = do
         pure $ combHead_u (tvrInfo_s nfo . tvrType_s nt) comb
     let nimap = fromList [ (combIdent c, Just . EVar $ combHead c) | c <- cs ]
             `mappend` imap
-        f :: (IdMap (Maybe E)) -> E -> m E
-        f ni e = annotate ni idann letann lamann e
+        f :: IdMap (Maybe E) -> E -> m E
+        f ni = annotate ni idann letann lamann
     let mrule :: Rule -> m Rule
         mrule r = do
             let g tvr = do
@@ -38,7 +38,7 @@ annotateCombs imap idann letann lamann cs = do
             bs <- mapM g $ ruleBinds r
             let nnimap = (foldr (.) id $ snds bs) nimap :: IdMap (Maybe E)
             args <- mapM (f nnimap) (ruleArgs r)
-            body <- (f nnimap) (ruleBody r)
+            body <- f nnimap (ruleBody r)
             pure r { ruleBinds = fsts bs, ruleBody = body, ruleArgs = args }
     forM cs $ \comb -> do
         rs <- mapM mrule (combRules comb)
@@ -46,7 +46,7 @@ annotateCombs imap idann letann lamann cs = do
         pure . combRules_s rs . combBody_s nb $ comb
 
 annotateDs :: Monad m =>
-    (IdMap (Maybe E))
+    IdMap (Maybe E)
     -> (Id -> Info -> m Info)  -- ^ annotate based on Id map
     -> (E -> Info -> m Info)   -- ^ annotate letbound bindings
     -> (E -> Info -> m Info)   -- ^ annotate lambdabound bindings
@@ -58,7 +58,7 @@ annotateDs imap idann letann lamann ds = do
     pure ds'
 
 annotateProgram :: Monad m =>
-    (IdMap (Maybe E))
+    IdMap (Maybe E)
     -> (Id -> Info -> m Info)   -- ^ annotate based on Id map
     -> (E -> Info -> m Info)    -- ^ annotate letbound bindings
     -> (E -> Info -> m Info)    -- ^ annotate lambdabound bindings
@@ -66,12 +66,12 @@ annotateProgram :: Monad m =>
     -> m Program
 annotateProgram imap idann letann lamann prog = do
     ds <- annotateCombs imap idann letann lamann (progCombinators prog)
-    pure $ programUpdate $ prog { progCombinators = ds }
+    pure . programUpdate $ prog { progCombinators = ds }
 
 type AM m = ReaderT (IdMap (Maybe E)) m
 
 annotate :: Monad m =>
-    (IdMap (Maybe E))
+    IdMap (Maybe E)
     -> (Id -> Info -> m Info)   -- ^ annotate based on Id map
     -> (E -> Info -> m Info)    -- ^ annotate letbound bindings
     -> (E -> Info -> m Info)    -- ^ annotate lambdabound bindings
@@ -86,13 +86,13 @@ annotate imap idann letann lamann e = runReaderT (f e) imap where
     f (ELam tvr e) = lp ELam tvr e
     f (EPi tvr e) = lp EPi tvr e
     f (EAp a b) = liftM2 EAp (f a) (f b)
-    f (EError x e) = liftM (EError x) (f e)
+    f (EError x e) = fmap (EError x) (f e)
     f (EPrim x es e) = liftM2 (EPrim x) (mapM f es) (f e)
     f ELetRec { eDefs = dl, eBody = e } = do
         dl' <- flip mapM dl $ \ (t,e) -> do
             nfo <- lift $ letann e (tvrInfo t)
             pure t { tvrInfo = nfo }
-        (as,rs) <- liftM unzip $ mapMntvr dl'
+        (as,rs) <- fmap unzip $ mapMntvr dl'
         local (foldr (.) id rs) $ do
             ds <- mapM f (snds dl)
             e' <- f e
