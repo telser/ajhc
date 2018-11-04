@@ -48,7 +48,6 @@ module Fixer.Fixer(
 
 import Control.Monad.Trans
 import Data.IORef
-import Data.Monoid
 import Data.Typeable
 import Data.Unique
 import System.IO(hFlush, stdout, Handle, hPutStr)

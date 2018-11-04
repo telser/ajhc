@@ -3,9 +3,6 @@
 
 module E.Type where
 
-import Data.Foldable hiding(concat)
-import Data.Traversable
-
 import C.Prims
 import Cmm.Number
 import Doc.DocLike hiding((<$>))

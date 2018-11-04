@@ -1,6 +1,5 @@
 module Name.Binary() where
 
-import Data.Monoid
 import Data.Maybe
 
 import Data.Binary

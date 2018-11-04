@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module Name.VConsts where
 
-import Control.Applicative
-import Data.Foldable
 import Data.Monoid
 import Data.Traversable
 

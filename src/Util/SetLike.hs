@@ -2,14 +2,11 @@
 module Util.SetLike where
 
 import Data.List(foldl')
-import Data.Monoid
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
 import Util.HasSize
-import Data.Foldable hiding(toList, foldl')
-import Data.Traversable
 
 infixl 9 \\ --
 
@@ -265,4 +262,3 @@ instance Intjection k => MapLike (IntjectionMap k v) where
     mlookup (fromIntjection -> i) (IntjectionMap v) = mlookup i v
     values (IntjectionMap v) = values v
     unionWith f (IntjectionMap x) (IntjectionMap y) = IntjectionMap $ unionWith f x y
-

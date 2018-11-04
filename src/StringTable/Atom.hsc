@@ -21,7 +21,6 @@ import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
 import Data.Data
-import Data.Monoid
 import System.IO.Unsafe (unsafePerformIO)
 import Foreign.Marshal
 import Foreign.Storable

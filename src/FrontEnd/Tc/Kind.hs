@@ -16,7 +16,6 @@ module FrontEnd.Tc.Kind(
 
 import Control.Monad
 import Data.IORef
-import Data.Monoid
 import Data.Binary
 
 import Doc.DocLike

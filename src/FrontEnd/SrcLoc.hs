@@ -1,11 +1,8 @@
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module FrontEnd.SrcLoc where
 
-import Control.Applicative
 import Control.Monad.Identity
 import Control.Monad.Writer
-import Data.Foldable
-import Data.Traversable
 import Data.Binary
 import Data.Generics
 

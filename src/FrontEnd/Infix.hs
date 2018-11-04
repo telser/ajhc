@@ -19,7 +19,6 @@
 module FrontEnd.Infix (buildFixityMap, infixHsModule, FixityMap,size, infixStatement, restrictFixityMap) where
 
 import Data.Binary
-import Data.Monoid
 import qualified Data.Map as Map
 
 import FrontEnd.HsSyn

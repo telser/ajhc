@@ -7,7 +7,6 @@ module PackedString (
 
 import Data.Binary
 import Data.Generics
-import Data.Monoid
 import GHC.Exts
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as BSU

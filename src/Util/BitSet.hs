@@ -6,11 +6,8 @@ module Util.BitSet(
     fromWord
     ) where
 
-
 import Data.List(foldl')
 import Data.Bits
-import Data.Word
-import Data.Monoid
 import Util.SetLike
 import Util.HasSize
 
@@ -132,4 +129,3 @@ toWord (BitSet w) = w
 
 fromWord :: Word -> BitSet
 fromWord w = BitSet w
-

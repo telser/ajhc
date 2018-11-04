@@ -7,7 +7,6 @@ module Grin.Lint(
 
 import Control.Exception
 import Control.Monad.Reader
-import Data.Monoid
 import System.IO
 import qualified Data.Set as Set
 

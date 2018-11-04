@@ -1,7 +1,6 @@
 module E.Arbitrary where
 
 --import Test.QuickCheck
-import Data.Monoid
 import Doc.DocLike()
 import Doc.PPrint
 import Doc.Pretty (putDoc, Doc)

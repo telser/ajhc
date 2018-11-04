@@ -3,7 +3,6 @@
 
 module Util.Relation where
 
-import Data.Monoid
 import Data.Set as Set hiding(map)
 import Util.SetLike
 import qualified Data.Set as Set

@@ -40,7 +40,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Bits
 import Data.Int
-import Data.Monoid
 import qualified Data.Binary as B
 import qualified Data.IntMap  as IM
 import qualified Data.IntSet as IS

@@ -3,7 +3,6 @@ module Grin.DeadCode(deadCode) where
 
 import Control.Monad
 import Control.Monad.Trans (MonadIO)
-import Data.Monoid
 import qualified Data.Set as Set
 
 import Fixer.Fixer

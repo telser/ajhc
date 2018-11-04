@@ -36,7 +36,6 @@ module FrontEnd.ParseUtils (
 
 import Data.Char
 import Data.Maybe
-import Data.Monoid
 import Data.Ratio
 import qualified Data.Set as Set
 import qualified Data.Traversable as T

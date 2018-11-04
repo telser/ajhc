@@ -1,7 +1,5 @@
 module Support.FreeVars where
 
-import Data.Monoid
-
 class Monoid b => FreeVars a b where
     freeVars ::  a -> b
 

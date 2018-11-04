@@ -1,7 +1,6 @@
 {-# OPTIONS -XTypeFamilies #-}
 module Util.GMap where
 
-import Data.Monoid
 import Util.HasSize
 import Util.SetLike
 import qualified Data.IntMap as IM

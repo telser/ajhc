@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -pgmF drift-ghc -F #-}
 module Ho.Type where
 
-import Data.Monoid
 import qualified Data.ByteString as BS
 import Data.Map
 

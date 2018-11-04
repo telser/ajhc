@@ -17,7 +17,6 @@ import Control.Monad
 import Data.Char
 import Data.List
 import Data.Maybe
-import Data.Monoid
 import Data.Version
 import Data.Yaml.Syck
 import System.Directory

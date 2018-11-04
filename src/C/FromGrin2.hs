@@ -112,7 +112,7 @@ runC grin (C m) =  (execUniq1 (runRWST m startEnv emptyHcHash),ityrep) where
         b <- Op.cmmTyBits ct
         guard $ b <= 30
         Op.HintNone <- Op.cmmTyHint ct
-        return ()
+        pure ()
 
 tellFunctions :: [Function] -> C ()
 tellFunctions fs = tell mempty { wFunctions = Map.fromList $ map (\x -> (functionName x,x)) fs }
@@ -190,7 +190,7 @@ compileGrin grin = (LBS.fromChunks code, req)  where
         let ts =  text "/* " <> text (show v) <> text " = " <> (text $ P.render (pprint val)) <> text "*/\n" <>
                 text "static node_t _" <> tshow (varName v) <> text " = { .head = " <> ef <> text " };\n" <>
                 text "#define " <> tshow (varName v) <+>  text "(MKLAZY_C(&_" <> tshow (varName v) <> text "))\n";
-        return ts
+        pure ts
     convertCAF _ = error "FromGrin2.compileGrin: bad."
 
 convertFunc :: Maybe FfiExport -> (Atom,Lam) -> C [Function]
@@ -207,10 +207,10 @@ convertFunc ffie (n,as :-> body) = do
 
         as' <- flip mapM (zip [1 :: Int .. ] as) $ \ (ix,(Var v t)) -> do
             t' <- convertType t
-            return $ if v == v0 then (name $ 'u':show ix,t') else (varName v,t')
+            pure $ if v == v0 then (name $ 'u':show ix,t') else (varName v,t')
 
         mstub <- case ffie of
-                Nothing -> return []
+                Nothing -> pure []
                 Just ~(FfiExport cn Safe CCall argTys retTy) -> do
                     newVars <- mapM (liftM (name . show) . newVar . basicType') argTys
 
@@ -228,38 +228,38 @@ convertFunc ffie (n,as :-> body) = do
 
                     let call = if voidType == fr2 then toStatement $ funcall else callret
                         r    = if voidType == fr2 then mempty else creturn tmp
-                    return [function fnname2 fr2 as2 [Public]
+                    pure [function fnname2 fr2 as2 [Public]
                               (g & a & ai & hi & call & fi & r)]
 
-        return (function fnname fr (mgct as') ats s : mstub)
+        pure (function fnname fr (mgct as') ats s : mstub)
 
 fetchVar :: Var -> Ty -> C Expression
-fetchVar (V 0) _ = return $ noAssign (err "fetchVar v0")
-fetchVar v@(V n) _ | n < 0 = return $ (variable  $ varName v)
+fetchVar (V 0) _ = pure $ noAssign (err "fetchVar v0")
+fetchVar v@(V n) _ | n < 0 = pure $ (variable  $ varName v)
 fetchVar v ty = do
     t <- convertType ty
     is <- asks rInscope
     let n = varName v
     dclare <- asks rDeclare
-    return $ (if v == v0 then noAssign else id) $ if not dclare then variable n else localVariable t n
+    pure $ (if v == v0 then noAssign else id) $ if not dclare then variable n else localVariable t n
 
 fetchVar' :: Var -> Ty -> C (Name,Type)
 fetchVar' (V n) _ | n < 0 = error "fetchVar': CAF"
 fetchVar' v ty = do
     t <- convertType ty
-    return $ (varName v,t)
+    pure $ (varName v,t)
 
 convertVals :: [Val] -> C Expression
-convertVals [] = return emptyExpression
+convertVals [] = pure emptyExpression
 convertVals [x] = convertVal x
 convertVals xs = do
     ts <- mapM convertType (map getType xs)
     xs <- mapM convertVal xs
-    return (structAnon (zip xs ts))
+    pure (structAnon (zip xs ts))
 
 convertVal :: Val -> C Expression
 convertVal v = cvc v where
-    cvc v = convertConst v >>= maybe (cv v) return
+    cvc v = convertConst v >>= maybe (cv v) pure
     cv (Var v ty) = fetchVar v ty
     cv (Const h) = do
         cpr <- asks rConst
@@ -267,48 +267,48 @@ convertVal v = cvc v where
             NodeC a ts -> do
                 bn <- basicNode a ts
                 case bn of
-                    Just bn ->  return (cast sptr_t bn)
+                    Just bn ->  pure (cast sptr_t bn)
                     _ -> do
                         (_,i) <- newConst cpr h
-                        return $ variable (name $  'c':show i )
+                        pure $ variable (name $  'c':show i )
             _ -> do
                 (_,i) <- newConst cpr h
-                return $ variable (name $  'c':show i )
+                pure $ variable (name $  'c':show i )
     cv h@(NodeC a ts) | valIsConstant h = do
         cpr <- asks rConst
         bn <- basicNode a ts
         case bn of
-            Just bn -> return bn
+            Just bn -> pure bn
             _ -> do
                 (_,i) <- newConst cpr h
-                return $ f_PROMOTE (variable (name $  'c':show i ))
+                pure $ f_PROMOTE (variable (name $  'c':show i ))
 
     cv (ValPrim p [x] (TyPrim opty)) = do
         x' <- convertVal x
         case p of
             Op (Op.UnOp n ta) r -> primUnOp n ta r x'
-            Op (Op.ConvOp n ta) r -> return $ castFunc n ta r x'
-            x -> return $ err ("convertVal: " ++ show x)
+            Op (Op.ConvOp n ta) r -> pure $ castFunc n ta r x'
+            x -> pure $ err ("convertVal: " ++ show x)
     cv (ValPrim p [x,y] _) = do
         x' <- convertVal x
         y' <- convertVal y
         case p of
             Op (Op.BinOp n ta tb) r -> primBinOp n ta tb r x' y'
-            x -> return $ err ("convertVal: " ++ show x)
+            x -> pure $ err ("convertVal: " ++ show x)
 
-    cv x = return $ err ("convertVal: " ++ show x)
+    cv x = pure $ err ("convertVal: " ++ show x)
 
-convertTypes [] = return voidType
+convertTypes [] = pure voidType
 convertTypes [t] = convertType t
 convertTypes xs = do
     xs <- mapM convertType xs
-    return (anonStructType xs)
+    pure (anonStructType xs)
 
-convertType TyNode = return wptr_t
-convertType TyINode = return sptr_t
-convertType (TyPtr TyINode) = return $ ptrType sptr_t
-convertType (TyPtr TyNode) = return $ ptrType wptr_t
-convertType ~(TyPrim opty) = return (opTyToC opty)
+convertType TyNode = pure wptr_t
+convertType TyINode = pure sptr_t
+convertType (TyPtr TyINode) = pure $ ptrType sptr_t
+convertType (TyPtr TyNode) = pure $ ptrType wptr_t
+convertType ~(TyPrim opty) = pure (opTyToC opty)
 
 tyToC _ Op.TyBool = "bool"
 tyToC dh (Op.TyComplex ty) = "_Complex " ++ tyToC dh ty
@@ -339,7 +339,7 @@ opTyToC' opty = tyToC Op.HintUnsigned opty
 
 localScope xs action = do
     let fvs = freeVars xs
-    aas <- mapM (\ (v,t) -> do t <- convertType t ; return . toStatement $ localVariable t (varName v)) (filter ((v0 /=) . fst) $ Set.toList fvs)
+    aas <- mapM (\ (v,t) -> do t <- convertType t ; pure . toStatement $ localVariable t (varName v)) (filter ((v0 /=) . fst) $ Set.toList fvs)
     local (rInscope_u $ Set.union (Set.map varName (freeVars xs))) (action . statementOOB $ mconcat aas)
 
 iDeclare action = local (\e -> e { rDeclare = True }) action
@@ -350,23 +350,23 @@ convertBody Let { expDefs = defs, expBody = body } = do
     nn <- flip mapM defs $ \FuncDef { funcDefName = name, funcDefBody = as :-> _ } -> do
         vs' <- mapM convertVal as
         let nm = (toName (show name ++ "_" ++ show u))
-        return (as,(name,(nm,vs')))
+        pure (as,(name,(nm,vs')))
     let done = (toName $ "done" ++ show u)
     let localJumps xs action = localScope (fsts xs) $ \dcls ->  local (rEMap_u (Map.fromList (snds xs) `mappend`)) (fmap (dcls &) action)
     localJumps nn $ do
     rs <- flip mapM defs $ \FuncDef { funcDefName = name, funcDefBody = as :-> b } -> do
         ss <- convertBody b
-        return (annotate (show as) (label (toName (show name ++ "_" ++ show u))) & subBlock ss)
+        pure (annotate (show as) (label (toName (show name ++ "_" ++ show u))) & subBlock ss)
     ss <- (convertBody body)
     todo <- asks rTodo
     case todo of
-        TodoReturn -> return (ss & mconcat rs);
-        TodoReturnVoid -> return (ss & mconcat rs);
-        _ -> return (ss & goto done & mconcat (intersperse (goto done) rs) & label done);
+        TodoReturn -> pure (ss & mconcat rs);
+        TodoReturnVoid -> pure (ss & mconcat rs);
+        _ -> pure (ss & goto done & mconcat (intersperse (goto done) rs) & label done);
 convertBody (e :>>= [] :-> e') = do
     ss <- localTodo TodoNothing (convertBody e)
     ss' <- convertBody e'
-    return (ss & ss')
+    pure (ss & ss')
 convertBody (Return [v] :>>= [(NodeC t as)] :-> e') = nodeAssign v t as e'
 --convertBody (Fetch v :>>= [(NodeC t as)] :-> e') = nodeAssign v t as e'
 convertBody (Case v [p1@([NodeC _ (_:_)] :-> _),p2@([NodeC _ []] :-> _)]) = convertBody $ Case v [p2,p1]
@@ -378,20 +378,20 @@ convertBody (Case v@(getType -> TyNode) [[p1@(NodeC t fps)] :-> e1,[p2] :-> e2])
         da v@Var {} e = do
             v'' <- iDeclare $ convertVal v
             e' <- convertBody e
-            return $ v'' =* scrut & e'
+            pure $ v'' =* scrut & e'
         da n1@(NodeC t _) (Return [n2@NodeC {}]) | n1 == n2 = convertBody (Return [v])
         da ~(NodeC t as) e = nodeAssign v t as e
-        am Var {} e = return e
+        am Var {} e = pure e
         am ~(NodeC t2 _) e = do
             --tellTags t2
-            --return $ annotate (show p2) (f_assert ((constant $ enum (nodeTagName t2)) `eq` tag) & e)
-            return $ annotate (show p2) e
+            --pure $ annotate (show p2) (f_assert ((constant $ enum (nodeTagName t2)) `eq` tag) & e)
+            pure $ annotate (show p2) e
         tag = if null fps then f_FETCH_RAW_TAG scrut else f_FETCH_TAG scrut
         ifscrut = if null fps then f_SET_RAW_TAG tenum `eq` scrut else tenum `eq` tag where
             tenum = (constant $ enum (nodeTagName t))
     p1' <- da p1 e1
     p2' <- am p2 =<< da p2 e2
-    return $ cif ifscrut p1' p2'
+    pure $ cif ifscrut p1' p2'
 
 -- zero is usually faster to test for than other values, so flip them if zero is being tested for.
 convertBody (Case v [v1, v2@([Lit n _] :-> _)]) | n == 0 = convertBody (Case v [v2,v1])
@@ -402,21 +402,21 @@ convertBody (Case v@(getType -> t) [[p1] :-> e1, [p2] :-> e2]) | Set.null ((free
              | otherwise = annotate (show p2) (f_assert ((cp p2) `eq` scrut) & e)
     e1' <- convertBody e1
     e2' <- convertBody e2
-    return $ cif (cp p1 `eq` scrut) e1' (am e2')
+    pure $ cif (cp p1 `eq` scrut) e1' (am e2')
 convertBody (Case v@(getType -> TyNode) ls) = do
     scrut <- convertVal v
     let tag = f_FETCH_TAG scrut
         da ([(Var v _)] :-> e) | v == v0 = do
             e' <- convertBody e
-            return $ (Nothing,e')
+            pure $ (Nothing,e')
         da ([v@(Var {})] :-> e) = do
             v'' <- iDeclare $ convertVal v
             e' <- convertBody e
-            return $ (Nothing,v'' =* scrut & e')
+            pure $ (Nothing,v'' =* scrut & e')
         da ([n1@(NodeC t _)] :-> Return [n2@NodeC {}]) | n1 == n2 = do
             tellTags t
             e' <- convertBody (Return [v])
-            return (Just (enum (nodeTagName t)),e')
+            pure (Just (enum (nodeTagName t)),e')
         da (~[(NodeC t as)] :-> e) = do
             tellTags t
             declareStruct t
@@ -426,60 +426,60 @@ convertBody (Case v@(getType -> TyNode) ls) = do
                 ass = mconcat [if needed a then a' =* (project' (arg i) tmp) else mempty | a' <- as' | a <- as | i <- [(1 :: Int) ..] ]
                 fve = freeVars e
                 needed ~(Var v _) = v `Set.member` fve
-            return $ (Just (enum (nodeTagName t)), ass & e')
+            pure $ (Just (enum (nodeTagName t)), ass & e')
     ls' <- mapM da ls
-    return $ switch' tag ls'
+    pure $ switch' tag ls'
 convertBody (Case v ls) = do
     scrut <- convertVal v
     let da ([(Var vv _)] :-> e) | vv == v0 = do
             e' <- convertBody e
-            return (Nothing,e')
+            pure (Nothing,e')
         da ([v@(Var {})] :-> e) = do
             v'' <- iDeclare $ convertVal v
             e' <- convertBody e
-            return (Nothing,v'' =* scrut & e')
+            pure (Nothing,v'' =* scrut & e')
         da (~[(Lit i _)] :-> e) = do
             e' <- convertBody e
-            return $ (Just (number $ fromIntegral i), e')
+            pure $ (Just (number $ fromIntegral i), e')
         --da (~[x] :-> e) = da ( x :-> e )
     ls' <- mapM da ls
-    return $ switch' scrut ls'
+    pure $ switch' scrut ls'
 convertBody (Error s t) = do
     x <- asks rTodo
     let jerr | null s    = toStatement $ functionCall (name "jhc_exit") [constant $ number 255]
              | otherwise = toStatement $ functionCall (name "jhc_error") [string s]
-    let f (TyPtr _) = return nullPtr
-        f TyNode = return nullPtr
-        f TyINode = return nullPtr
-        f (TyPrim x) = return $ cast (opTyToC x) (constant $ number 0)
-        f x = return $ err ("error-type " ++ show x)
-        g [] = return emptyExpression
+    let f (TyPtr _) = pure nullPtr
+        f TyNode = pure nullPtr
+        f TyINode = pure nullPtr
+        f (TyPrim x) = pure $ cast (opTyToC x) (constant $ number 0)
+        f x = pure $ err ("error-type " ++ show x)
+        g [] = pure emptyExpression
         g [x] = f x
-        g xs = do ts <- mapM convertType xs; xs <- mapM f xs ; return $ structAnon (zip xs ts)
+        g xs = do ts <- mapM convertType xs; xs <- mapM f xs ; pure $ structAnon (zip xs ts)
     case x of
-        TodoNothing -> return jerr
-        TodoExp _ -> return jerr
-        TodoDecl {} -> return jerr
+        TodoNothing -> pure jerr
+        TodoExp _ -> pure jerr
+        TodoDecl {} -> pure jerr
         TodoReturn -> do
             v <- g t
-            return (jerr & creturn v)
+            pure (jerr & creturn v)
         TodoReturnVoid -> do
             v <- g t
-            return (jerr & v & creturn emptyExpression)
+            pure (jerr & v & creturn emptyExpression)
 
-convertBody (BaseOp (StoreNode b) [n@NodeC {}]) = newNode region_heap (bool b wptr_t sptr_t) n >>= \(x,y) -> simpleRet y >>= \v -> return (x & v)
-convertBody (BaseOp (StoreNode b) [n@NodeC {},region]) = newNode region (bool b wptr_t sptr_t) n >>= \(x,y) -> simpleRet y >>= \v -> return (x & v)
+convertBody (BaseOp (StoreNode b) [n@NodeC {}]) = newNode region_heap (bool b wptr_t sptr_t) n >>= \(x,y) -> simpleRet y >>= \v -> pure (x & v)
+convertBody (BaseOp (StoreNode b) [n@NodeC {},region]) = newNode region (bool b wptr_t sptr_t) n >>= \(x,y) -> simpleRet y >>= \v -> pure (x & v)
 
 convertBody (e :>>= [(Var vn _)] :-> e') | vn == v0 = do
     ss <- localTodo TodoNothing (convertBody e)
     ss' <- convertBody e'
-    return (ss & ss')
+    pure (ss & ss')
 
 convertBody (e :>>= [(Var vn' vt')] :-> e') | not (isCompound e) = do
     (vn,vt) <- fetchVar' vn' vt'
     ss <- localTodo (TodoDecl vn vt) (convertBody e)
     ss' <- convertBody e'
-    return (ss & ss')
+    pure (ss & ss')
 
 convertBody (e :>>= [v@(Var vn vt)] :-> e') = do
     v' <- convertVal v
@@ -487,7 +487,7 @@ convertBody (e :>>= [v@(Var vn vt)] :-> e') = do
     let sdecl = statementOOB $ toStatement (localVariable vt (varName vn))
     ss <- localTodo (TodoExp [v'])  (convertBody e)
     ss' <- convertBody e'
-    return (sdecl & ss & ss')
+    pure (sdecl & ss & ss')
 
 convertBody (e :>>= xs@(_:_:_) :-> e') = do
     ts <- mapM (convertType . getType) xs
@@ -495,18 +495,18 @@ convertBody (e :>>= xs@(_:_:_) :-> e') = do
     vs <- iDeclare $ mapM convertVal xs
     ss <- localTodo (TodoExp [st]) (convertBody e)
     ss' <- convertBody e'
-    return $ dcl & ss & mconcat [ v =* projectAnon i st | v <- vs | i <- [0..] ] & ss'
+    pure $ dcl & ss & mconcat [ v =* projectAnon i st | v <- vs | i <- [0..] ] & ss'
 
 -- mutable arrays and iorefs
 convertBody (BaseOp PokeVal [Index base off,z])  = do
     base <- convertVal base
     off <- convertVal off
     z' <- convertVal z
-    return $ indexArray base off =* z'
+    pure $ indexArray base off =* z'
 convertBody (BaseOp PokeVal [base,z])  = do
     base <- convertVal base
     z' <- convertVal z
-    return $ indexArray base (constant $ number 0) =* z'
+    pure $ indexArray base (constant $ number 0) =* z'
 convertBody (BaseOp PeekVal [Index base off]) | getType base == TyPtr tyINode = do
     base <- convertVal base
     off <- convertVal off
@@ -518,9 +518,9 @@ convertBody (BaseOp (Coerce ty) [v])  = do
 convertBody (GcRoots vs b) = do
     vs <- mapM convertVal vs
     b' <- convertBody b
-    return $ subBlock (gc_roots vs & b')
+    pure $ subBlock (gc_roots vs & b')
 
--- return, promote and demote
+-- pure, promote and demote
 convertBody (BaseOp Promote [v])       | getType v == tyINode = simpleRet =<< f_promote `liftM` convertVal v
 convertBody (BaseOp Demote [n@Var {}]) | getType n == tyDNode = simpleRet =<< f_demote `liftM` convertVal n
 --convertBody (Store n@Var {}) | getType n == tyDNode = simpleRet =<< f_demote `liftM` convertVal n
@@ -532,26 +532,26 @@ convertBody (Return xs@(_:_:_)) = do
     case t of
         TodoExp [e] -> do
             xs <- mapM convertVal xs
-            ss <- forMn xs $ \ (v,i) -> return (projectAnon i e =* v)
-            return (mconcat ss)
+            ss <- forMn xs $ \ (v,i) -> pure (projectAnon i e =* v)
+            pure (mconcat ss)
         _ -> simpleRet =<< convertVals xs
 
 convertBody e = do
     x <- asks rTodo
     (ss,er) <- convertExp e
     r <- simpleRet er
-    return (ss & r)
+    pure (ss & r)
 
 simpleRet er = do
     x <- asks rTodo
     case x of
-        TodoReturn -> return (creturn er)
-        TodoReturnVoid -> return (er & creturn emptyExpression)
-        _ | isEmptyExpression er -> return mempty
-        TodoNothing -> return (toStatement er)
-        TodoExp [v] -> return (v =* er)
+        TodoReturn -> pure (creturn er)
+        TodoReturnVoid -> pure (er & creturn emptyExpression)
+        _ | isEmptyExpression er -> pure mempty
+        TodoNothing -> pure (toStatement er)
+        TodoExp [v] -> pure (v =* er)
         TodoDecl n t -> do newAssignVar t n er
-        TodoExp [] -> return $ toStatement er
+        TodoExp [] -> pure $ toStatement er
         _ -> error "simpleRet: odd rTodo"
 
 nodeAssign :: Val -> Atom -> [Val] -> Exp -> C Statement
@@ -560,19 +560,19 @@ nodeAssign v t as e' = do
     v' <- convertVal v
     case mlookup t cpr of
         Just (TyRepRawVal signed) -> do
-            [arg] <- return as
+            [arg] <- pure as
             t <- convertType $ getType arg
             arg' <- iDeclare $ convertVal arg
             let s = arg' =* cast t (if signed then f_RAW_GET_F v' else f_RAW_GET_UF v')
             ss <- convertBody e'
-            return $ s & ss
+            pure $ s & ss
         _ -> do
             declareStruct t
             as' <- iDeclare $ mapM convertVal as
             let ass = concat [perhapsM (a `Set.member` fve) $ a' =* (project' (arg i) (concrete t v')) | a' <- as' | Var a _ <- as |  i <- [( 1 :: Int) ..] ]
                 fve = freeVars e'
             ss' <- convertBody e'
-            return $ mconcat ass & ss'
+            pure $ mconcat ass & ss'
 
 --isCompound Fetch {} = False
 isCompound BaseOp {} = False
@@ -593,7 +593,7 @@ convertExp (Prim Func { primArgTypes = as, primRetType = r, primRetArgs = rs@(_:
     --let rrs = map basicType' (r:rs)
     ras <- mapM (newVar . basicType') rs
     (stmt,rv) <- basicType' r `newTmpVar` (functionCall (name $ unpackPS funcName) ([ cast (basicType' t) v | v <- vs' | t <- as ] ++ map reference ras))
-    return $ (stmt, structAnon (zip (rv:ras) rt))
+    pure $ (stmt, structAnon (zip (rv:ras) rt))
 convertExp (Prim Func { primRetArgs = [], .. } vs ty) = do
     tell mempty { wRequires = primRequires }
     vs' <- mapM convertVal vs
@@ -601,29 +601,29 @@ convertExp (Prim Func { primRetArgs = [], .. } vs ty) = do
     let addgc = if primSafety == JhcContext && fopts FO.Jgc then mgc else id
         fcall'= functionCall (name $ unpackPS funcName) $ addgc [ cast (basicType' t) v | v <- vs' | t <- primArgTypes ]
         fcall = if rt == voidType then fcall' else cast rt fcall'
-    return (mempty, fcall)
+    pure (mempty, fcall)
 convertExp (Prim p vs ty) =  do
     tell mempty { wRequires = primReqs p }
     e <- convertPrim p vs ty
-    return (mempty,e)
+    pure (mempty,e)
 
 --convertExp (App a [fn,x] _) | a == funcApply = do
 --    fn' <- convertVal fn
 --    x' <- convertVal x
---    return (mempty,(functionCall (name "eval") [v']))
+--    pure (mempty,(functionCall (name "eval") [v']))
 convertExp (BaseOp Eval [v]) = do
     v' <- convertVal v
-    return (mempty,f_eval v')
+    pure (mempty,f_eval v')
 convertExp (BaseOp GcTouch _) = do
-    return (mempty, emptyExpression)
+    pure (mempty, emptyExpression)
 convertExp (App a vs _) = do
     lm <- asks rEMap
     vs' <- mapM convertVal vs
     case a `mlookup` lm of
         Just (nm,as) -> do
             let ss = [ a =* v | a <- as | v <- vs' ]
-            return (mconcat ss & goto nm, emptyExpression)
-        Nothing -> return $ (mempty, functionCall (toName (fromAtom a)) (mgc vs'))
+            pure (mconcat ss & goto nm, emptyExpression)
+        Nothing -> pure $ (mempty, functionCall (toName (fromAtom a)) (mgc vs'))
 convertExp (BaseOp Overwrite [v@(Var vv _),tn@(NodeC t as)]) | getType v == TyINode = do
     v' <- convertVal v
     as' <- mapM convertVal as
@@ -631,11 +631,11 @@ convertExp (BaseOp Overwrite [v@(Var vv _),tn@(NodeC t as)]) | getType v == TyIN
     let tmp' = cast nt (f_FROM_SPTR v')
     if not (tagIsSuspFunction t) && vv < v0 then do
         (nns, nn) <- newNode region_heap fptr_t tn
-        return (nns & getHead (f_NODEP(f_FROM_SPTR v')) =* nn,emptyExpression)
+        pure (nns & getHead (f_NODEP(f_FROM_SPTR v')) =* nn,emptyExpression)
      else do
         s <- tagAssign tmp' t
         let ass = [project' (arg i) tmp' =* a | a <- as' | i <- [(1 :: Int) ..] ]
-        return (mconcat $ s:ass,emptyExpression)
+        pure (mconcat $ s:ass,emptyExpression)
 
 convertExp Alloc { expValue = v, expCount = c, expRegion = r }
         | r == region_heap, TyINode == getType v  = do
@@ -643,24 +643,24 @@ convertExp Alloc { expValue = v, expCount = c, expRegion = r }
     c' <- convertVal c
     (malloc,tmp) <- jhc_malloc_ptrs c' =:: ptrType sptr_t
     fill <- case v of
-        ValUnknown _ -> return mempty
+        ValUnknown _ -> pure mempty
         _ -> do
             i <- newVar (basicType "int")
-            return $ forLoop i (expressionRaw "0") c' $ indexArray tmp i =* v'
-    return (malloc `mappend` fill, tmp)
+            pure $ forLoop i (expressionRaw "0") c' $ indexArray tmp i =* v'
+    pure (malloc `mappend` fill, tmp)
 convertExp Alloc { expValue = v, expCount = c, expRegion = r } |
     r == region_atomic_heap, TyPrim Op.bits_ptr == getType v  = do
         v' <- convertVal v
         c' <- convertVal c
         (malloc,tmp) <- jhc_malloc_atomic c' =:: ptrType uintptr_t
         fill <- case v of
-            ValUnknown _ -> return mempty
+            ValUnknown _ -> pure mempty
             _ -> do
                 i <- newVar (basicType "int")
-                return $ forLoop i (expressionRaw "0") c' $ indexArray tmp i =* v'
-        return (malloc `mappend` fill, tmp)
+                pure $ forLoop i (expressionRaw "0") c' $ indexArray tmp i =* v'
+        pure (malloc `mappend` fill, tmp)
 
-convertExp e = return (err (show e),err "nothing")
+convertExp e = pure (err (show e),err "nothing")
 
 {-
 ccaf :: (Var,Val) -> P.Doc
@@ -691,42 +691,42 @@ buildConstants cpr grin fh = P.vcat (map cc (Grin.HashConst.toList fh)) where
 convertConst :: Val -> C (Maybe Expression)
 convertConst (NodeC n as) | all valIsConstant as = basicNode n as
 convertConst (Const (NodeC n as)) = fmap (fmap $ cast sptr_t) $ basicNode n as
-convertConst v = return (f v) where
+convertConst v = pure (f v) where
     f :: Val -> Maybe Expression
-    f (Lit i (TyPrim Op.TyBool)) = return $ toExpression (i /= 0)
-    f (Lit i (TyPrim (Op.TyBits _ Op.HintFloat))) = return (constant $ floating (realToFrac i))
-    f (Lit i _) = return (constant $ number (fromIntegral i))
+    f (Lit i (TyPrim Op.TyBool)) = pure $ toExpression (i /= 0)
+    f (Lit i (TyPrim (Op.TyBits _ Op.HintFloat))) = pure (constant $ floating (realToFrac i))
+    f (Lit i _) = pure (constant $ number (fromIntegral i))
     f (ValPrim p [] ty) = case p of
-        CConst _ s -> return $ expressionRaw $ unpackPS s
-        AddrOf _ t -> do rt <- convertType ty; return . cast rt $ expressionRaw ('&':unpackPS t)
+        CConst _ s -> pure $ expressionRaw $ unpackPS s
+        AddrOf _ t -> do rt <- convertType ty; pure . cast rt $ expressionRaw ('&':unpackPS t)
         PrimTypeInfo { primArgTy = arg, primTypeInfo = PrimSizeOf } ->
-            return $ expressionRaw ("sizeof(" ++ tyToC Op.HintUnsigned arg ++ ")")
+            pure $ expressionRaw ("sizeof(" ++ tyToC Op.HintUnsigned arg ++ ")")
         PrimTypeInfo { primArgTy = arg, primTypeInfo = PrimMinBound } ->
-            return $ expressionRaw ("prim_minbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
+            pure $ expressionRaw ("prim_minbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
         PrimTypeInfo { primArgTy = arg, primTypeInfo = PrimMaxBound } ->
-            return $ expressionRaw ("prim_maxbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
+            pure $ expressionRaw ("prim_maxbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
         PrimTypeInfo { primArgTy = arg, primTypeInfo = PrimUMaxBound } ->
-            return $ expressionRaw ("prim_umaxbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
-        PrimString s -> return $ cast (basicType "uintptr_t") (expressionRaw (show s))
-        x -> return $ err (show x)
+            pure $ expressionRaw ("prim_umaxbound(" ++ tyToC Op.HintUnsigned arg ++ ")")
+        PrimString s -> pure $ cast (basicType "uintptr_t") (expressionRaw (show s))
+        x -> pure $ err (show x)
     f (ValPrim p [x] (TyPrim opty)) = do
         x' <- f x
         case p of
             Op (Op.UnOp n ta) r -> primUnOp n ta r x'
-            Op (Op.ConvOp n ta) r -> return $ castFunc n ta r x'
-            x -> return $ err (show x)
+            Op (Op.ConvOp n ta) r -> pure $ castFunc n ta r x'
+            x -> pure $ err (show x)
     f (ValPrim p [x,y] _) = do
         x' <- f x
         y' <- f y
         case p of
             Op (Op.BinOp n ta tb) r -> primBinOp n ta tb r x' y'
-            x -> return $ err (show x)
+            x -> pure $ err (show x)
     f x = fail "f"
 
---convertPrim p vs = return (mempty,err $ show p)
+--convertPrim p vs = pure (mempty,err $ show p)
 convertPrim p vs ty
     | (CConst _ s) <- p = do
-        return $ expressionRaw $ unpackPS s
+        pure $ expressionRaw $ unpackPS s
     | Op {} <- p = do
         let [rt] = ty
         convertVal (ValPrim p vs rt)
@@ -734,18 +734,18 @@ convertPrim p vs ty
         v':vs' <- mapM convertVal vs
         rt <- convertTypes ty
         let fn = cast (funPtrType (basicType' r) (map basicType' as)) v'
-        return $ cast (rt) (indirectFunctionCall fn [ cast (basicType' t) v | v <- vs' | t <- as ])
+        pure $ cast (rt) (indirectFunctionCall fn [ cast (basicType' t) v | v <- vs' | t <- as ])
     | (Peek t) <- p, [v] <- vs = do
         v' <- convertVal v
-        return $ expressionRaw ("*((" <> (opTyToC' t) <+> "*)" <> (parens $ renderG v') <> char ')')
+        pure $ expressionRaw ("*((" <> (opTyToC' t) <+> "*)" <> (parens $ renderG v') <> char ')')
     | (Poke t) <- p, [v,x] <- vs = do
         v' <- convertVal v
         x' <- convertVal x
-        return $ expressionRaw ("*((" <> (opTyToC' t) <+> "*)" <> (parens $ renderG v') <> text ") = " <> renderG x')
+        pure $ expressionRaw ("*((" <> (opTyToC' t) <+> "*)" <> (parens $ renderG v') <> text ") = " <> renderG x')
     | (AddrOf _ t) <- p, [] <- vs = do
         rt <- convertTypes ty
-        return . cast rt $ expressionRaw ('&':unpackPS t)
-    | otherwise = return $ err ("prim: " ++ show (p,vs))
+        pure . cast rt $ expressionRaw ('&':unpackPS t)
+    | otherwise = pure $ err ("prim: " ++ show (p,vs))
 
 signedOps = [
 --    (Op.Div,"/"),  -- TODO round to -Infinity
@@ -775,55 +775,55 @@ floatOps = [
 binopSigned :: Op.BinOp -> Maybe String
 binopSigned b = lookup b signedOps
 
-castSigned ty v = return $ cast (basicType $ tyToC Op.HintSigned ty) v
+castSigned ty v = pure $ cast (basicType $ tyToC Op.HintSigned ty) v
 
 primBinOp n ta tb r a b
-    | Just fn <- Op.binopFunc ta tb n = return $ functionCall (toName fn) [a,b]
-    | Just (t,_) <- Op.binopInfix n = return $ operator t a b
+    | Just fn <- Op.binopFunc ta tb n = pure $ functionCall (toName fn) [a,b]
+    | Just (t,_) <- Op.binopInfix n = pure $ operator t a b
     | Just t <- binopSigned n = do
         a <- castSigned ta a
         b <- castSigned tb b
-        return $ operator t a b
-    | Just t <- lookup n floatOps = return $ operator t a b
-    | otherwise = return $ err ("primBinOp: " ++ show ((n,ta,tb,r),a,b))
+        pure $ operator t a b
+    | Just t <- lookup n floatOps = pure $ operator t a b
+    | otherwise = pure $ err ("primBinOp: " ++ show ((n,ta,tb,r),a,b))
 
 primUnOp Op.Neg ta r a = do
     a <- castSigned ta a
-    return $ uoperator "-" a
-primUnOp Op.Com ta r a = do return $ uoperator "~" a
-primUnOp Op.FNeg ta r a = do return $ uoperator "-" a
-primUnOp op ta r a | Just fn <- Op.unopFloat ta op = return $ functionCall (toName fn) [a]
+    pure $ uoperator "-" a
+primUnOp Op.Com ta r a = do pure $ uoperator "~" a
+primUnOp Op.FNeg ta r a = do pure $ uoperator "-" a
+primUnOp op ta r a | Just fn <- Op.unopFloat ta op = pure $ functionCall (toName fn) [a]
 primUnOp n ta r a
-    | otherwise = return $ err ("primUnOp: " ++ show ((n,ta,r),a))
+    | otherwise = pure $ err ("primUnOp: " ++ show ((n,ta,r),a))
 
 tagAssign :: Expression -> Atom -> C Statement
 tagAssign e t | tagIsSuspFunction t = do
     en <- declareEvalFunc False t
-    return $ getHead e =* f_TO_FPTR (reference (variable en))
+    pure $ getHead e =* f_TO_FPTR (reference (variable en))
 tagAssign e t = do
     cpr <- asks rCPR
     declareStruct t
     tyenv <- asks (grinTypeEnv . rGrin)
     --TyTy { tySiblings = sib } <- findTyTy tyenv t
     case mlookup t cpr of
-        --Just [n'] | n' == t -> return mempty
-        Just _ -> return mempty
+        --Just [n'] | n' == t -> pure mempty
+        Just _ -> pure mempty
         _ -> do
             tellTags t
-            return . toStatement $ f_SET_MEM_TAG e (constant (enum $ nodeTagName t))
+            pure . toStatement $ f_SET_MEM_TAG e (constant (enum $ nodeTagName t))
 
 tellAllTags :: Val -> C ()
 tellAllTags (NodeC n vs) = tellTags n >> mapM_ tellAllTags vs
-tellAllTags n = mapValVal tt n >> return () where
-    tt v = tellAllTags v >> return v
+tellAllTags n = mapValVal tt n >> pure () where
+    tt v = tellAllTags v >> pure v
 
 tellTags :: Atom -> C ()
-tellTags t | tagIsSuspFunction t = return ()
+tellTags t | tagIsSuspFunction t = pure ()
 tellTags t = do
     tyenv <- asks (grinTypeEnv . rGrin)
     TyTy { tySiblings = sib } <- findTyTy tyenv t
     case sib of
---        Just [n'] | n' == t ->  return ()
+--        Just [n'] | n' == t ->  pure ()
         Just rs -> tell mempty { wEnums = Map.fromList (zip (map nodeTagName rs) [0..]) }
         Nothing -> tell mempty { wTags = Set.singleton t }
 
@@ -832,7 +832,7 @@ newNode region ty ~(NodeC t as) = do
     bn <- basicNode t as
     cpr <- asks rCPR
     case bn of
-      Just e -> return (mempty,if ty == wptr_t then e else cast ty e)
+      Just e -> pure (mempty,if ty == wptr_t then e else cast ty e)
       Nothing -> do
         st <- nodeType t
         as' <- mapM convertVal as
@@ -848,7 +848,7 @@ newNode region ty ~(NodeC t as) = do
         (dtmp,tmp) <- case region == region_stack of
             True -> do
                 v <- newVar st
-                return (mempty,reference v)
+                pure (mempty,reference v)
             False -> do
                 tell mempty { wAllocs = Set.singleton (t,nptrs') }
                 ty `newTmpVar` malloc
@@ -856,7 +856,7 @@ newNode region ty ~(NodeC t as) = do
             ass = [ if isValUnknown aa then mempty else project' i tmp' =* a | a <- as' | aa <- as | i <- map arg [(1 :: Int) ..] ]
         tagassign <- tagAssign tmp' t
         let res = if sf then (f_MKLAZY tmp) else tmp
-        return (mconcat $ dtmp:tagassign:ass,res)
+        pure (mconcat $ dtmp:tagassign:ass,res)
 
 ------------------
 -- declaring stuff
@@ -884,24 +884,24 @@ declareStruct n = do
     unless (null fields) $ tell mempty { wStructures = Map.singleton (structureName theStruct) theStruct }
 
 basicNode :: Atom -> [Val] -> C (Maybe Expression)
-basicNode a _ | tagIsSuspFunction a = return Nothing
-basicNode a []  = do tellTags a ; return . Just $ (f_SET_RAW_TAG (constant $ enum (nodeTagName a)))
+basicNode a _ | tagIsSuspFunction a = pure Nothing
+basicNode a []  = do tellTags a ; pure . Just $ (f_SET_RAW_TAG (constant $ enum (nodeTagName a)))
 basicNode a [v] = do
     cpr <- asks rCPR
     case mlookup a cpr of
         Just (TyRepRawVal signed) -> case v of
-            Lit i ty | a == cChar, Just c <- ch -> return $ Just (f_RAW_SET_UF (toExpression c)) where
+            Lit i ty | a == cChar, Just c <- ch -> pure $ Just (f_RAW_SET_UF (toExpression c)) where
                 ch = do
                     c <- toIntegral i
                     guard $ c >= ord minBound && c <= ord maxBound
-                    c <- return $ chr c
+                    c <- pure $ chr c
                     guard $ isPrint c && isAscii c
-                    return c
+                    pure c
             _ -> do
                 v <- convertVal v
-                return $ Just (if signed then f_RAW_SET_F v else f_RAW_SET_UF v)
-        _ -> return Nothing
-basicNode _ _ = return Nothing
+                pure $ Just (if signed then f_RAW_SET_F v else f_RAW_SET_UF v)
+        _ -> pure Nothing
+basicNode _ _ = pure Nothing
 
 instance Op.ToCmmTy Ty where
     toCmmTy (TyPrim p) = Just p
@@ -923,7 +923,7 @@ declareEvalFunc isCAF n = do
         body' = if not isCAF && fopts FO.Jgc then subBlock (gc_roots [f_MKLAZY(variable aname)] & rest) else rest
         rest = body & update & addroot & creturn rvar
     tellFunctions [function fname wptr_t (mgct [(aname,atype)]) [a_STD, a_FALIGNED] body']
-    return fname
+    pure fname
 
 castFunc :: Op.ConvOp -> Op.Ty -> Op.Ty -> Expression -> Expression
 castFunc co ta tb e | ta == tb = e
@@ -1018,7 +1018,7 @@ getHead :: Expression -> Expression
 getHead e = project' (name "head") e
 
 nodeTypePtr a = liftM ptrType (nodeType a)
-nodeType a = return $ structType (nodeStructName a)
+nodeType a = pure $ structType (nodeStructName a)
 nodeStructName :: Atom -> Name
 nodeStructName a = toName ('s':fromAtom a)
 nodeCacheName a = toName ('c':fromAtom a)

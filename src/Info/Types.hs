@@ -2,7 +2,6 @@
 module Info.Types(module Info.Types, module Info.Properties) where
 
 import Data.Dynamic
-import Data.Monoid
 import Info.Properties
 
 import Util.BitSet

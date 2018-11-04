@@ -9,7 +9,6 @@ import Text.Printf
 import Util.Gen
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Version
 
 import FrontEnd.Rename(FieldMap(..))
 import Ho.Type

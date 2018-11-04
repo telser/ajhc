@@ -26,7 +26,6 @@ module FrontEnd.Diagnostic (
 
 import Data.List as List(find)
 import Data.Maybe (isJust)
-import Data.Monoid
 
 import FrontEnd.SrcLoc
 import PackedString

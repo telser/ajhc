@@ -1,7 +1,6 @@
 module E.Program where
 
 import Control.Monad.Identity
-import Data.Monoid
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
