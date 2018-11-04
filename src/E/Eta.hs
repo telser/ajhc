@@ -104,17 +104,17 @@ etaExpandProgram prog = runNameMT (programMapDs f prog) where
 -- this annotates a program with its arity information, iterating until a fixpoint is reached.
 etaAnnotateProgram :: Program -> Program
 etaAnnotateProgram prog = runIdentity $ programMapRecGroups mempty pass iletann pass f prog where
-    pass _ = return
-    iletann e nfo = return $ annotateArity e nfo
+    pass _ = pure
+    iletann e nfo = pure $ annotateArity e nfo
     letann e nfo = case Info.lookup nfo of
-        Nothing -> put True >> return (annotateArity e nfo)
+        Nothing -> put True >> pure (annotateArity e nfo)
         Just at -> do
             let at' = arityType e
             when (at /= at') (put True)
-            return $ annotateArity' at' nfo
+            pure $ annotateArity' at' nfo
     f (rg,ts) = do
         let (ts',fs) = runState (annotateCombs mempty pass letann pass ts) False
-        if fs then f (rg,ts') else return ts'
+        if fs then f (rg,ts') else pure ts'
 
 -- | eta reduce as much as possible
 etaReduce :: E -> E
@@ -134,11 +134,11 @@ etaReduce' e = case f e 0 of
 -}
 
 etaExpandDef' dataTable n t e = etaExpandDef dataTable n t e >>= \x -> case x of
-    Nothing -> return (tvrInfo_u (annotateArity e) t,e)
-    Just x -> return x
+    Nothing -> pure (tvrInfo_u (annotateArity e) t,e)
+    Just x -> pure x
 
 --collectIds :: E -> IdSet
---collectIds e = execWriter $ annotate mempty (\id nfo -> tell (singleton id) >> return nfo) (\_ -> return) (\_ -> return) e
+--collectIds e = execWriter $ annotate mempty (\id nfo -> tell (singleton id) >> pure nfo) (\_ -> pure) (\_ -> pure) e
 -- | eta expand a definition
 etaExpandDef :: (NameMonad Id m,Stats.MonadStats m)
     => DataTable
@@ -146,7 +146,7 @@ etaExpandDef :: (NameMonad Id m,Stats.MonadStats m)
     -> TVr
     -> E
     -> m (Maybe (TVr,E))
-etaExpandDef _ _ _ e | isAtomic e = return Nothing -- will be inlined
+etaExpandDef _ _ _ e | isAtomic e = pure Nothing -- will be inlined
 etaExpandDef dataTable min t e  = ans where
     --fvs = foldr insert (freeVars (b,map getType rs,(tvrType t,e))) (map tvrIdent rs) `mappend` collectIds e
     --(b,rs) = fromLam e
@@ -159,10 +159,10 @@ etaExpandDef dataTable min t e  = ans where
     ans = do
         -- note that we can't use the type in the tvr, because it will not have the right free typevars.
         (ne,flag) <- f min at e (expandPis dataTable $ infertype dataTable e) nameSupply
-        if flag then return (Just (tvrInfo_u (annotateArity' at) t,ne)) else return Nothing
+        if flag then pure (Just (tvrInfo_u (annotateArity' at) t,ne)) else pure Nothing
     f min (AFun _ a) (ELam tvr e) (EPi tvr' rt) _ns = do
         (ne,flag) <- f (min - 1) a e (subst tvr' (EVar tvr) rt) _ns
-        return (ELam tvr ne,flag)
+        pure (ELam tvr ne,flag)
     f min (AFun _ a) e (EPi tt rt) _nns = do
         if tvrIdent t == emptyId
          then Stats.mtick ("EtaExpand." ++ zeroName)
@@ -171,7 +171,7 @@ etaExpandDef dataTable min t e  = ans where
         let nv = tt { tvrIdent = n }
             eb = EAp e (EVar nv)
         (ne,_) <- f (min - 1) a eb (subst tt (EVar nv) rt) _nns
-        return (ELam nv ne,True)
+        pure (ELam nv ne,True)
     f min a e (EPi tt rt) _nns | min > 0 = do
         if tvrIdent t == emptyId
          then Stats.mtick ("EtaExpand.min." ++ zeroName)
@@ -180,18 +180,18 @@ etaExpandDef dataTable min t e  = ans where
         let nv = tt { tvrIdent = n }
             eb = EAp e (EVar nv)
         (ne,_) <- f (min - 1) a eb (subst tt (EVar nv) rt) _nns
-        return (ELam nv ne,True)
+        pure (ELam nv ne,True)
     f _ _ e _ _ = do
-        return (e,False)
+        pure (e,False)
 
 -- | eta expand a use of a value
 etaExpandAp :: (NameMonad Id m,Stats.MonadStats m) => DataTable -> TVr -> [E] -> m (Maybe E)
 etaExpandAp dataTable tvr xs = do
     r <- etaExpandDef dataTable 0 tvr { tvrIdent = emptyId} (foldl EAp (EVar tvr) xs)
-    return (fmap snd r)
+    pure (fmap snd r)
 
 {-
-etaExpandAp _ _ [] = return Nothing  -- so simple renames don't get eta-expanded
+etaExpandAp _ _ [] = pure Nothing  -- so simple renames don't get eta-expanded
 etaExpandAp dataTable t as | Just (Arity n err) <- Info.lookup (tvrInfo t) = case () of
     () | n > length as -> do
             let e = foldl EAp (EVar t) as
@@ -201,12 +201,12 @@ etaExpandAp dataTable t as | Just (Arity n err) <- Info.lookup (tvrInfo t) = cas
             let tvrs = f mempty [ (tvrIdent t,t { tvrIdent = n }) |  n <- [2,4 :: Int ..], not $ n `Set.member` freeVars (e,ets) | t <- ets ]
                 f map ((n,t):rs) = t { tvrType = substMap map (tvrType t)} : f (Map.insert n (EVar t) map) rs
                 f _ [] = []
-            return (Just $ foldr ELam (foldl EAp e (map EVar tvrs)) tvrs)
+            pure (Just $ foldr ELam (foldl EAp e (map EVar tvrs)) tvrs)
        | err && length as > n -> do
             let ot = infertype dataTable (foldl EAp (EVar t) as)
             mticks (length as - n) ("EtaExpand.bottoming.{" ++ tvrShowName t)
-            return $ Just (prim_unsafeCoerce ot (foldl EAp (EVar t) (take n as)))  -- we can drop any extra arguments applied to something that bottoms out.
-       | otherwise -> return Nothing
+            pure $ Just (prim_unsafeCoerce ot (foldl EAp (EVar t) (take n as)))  -- we can drop any extra arguments applied to something that bottoms out.
+       | otherwise -> pure Nothing
 
-etaExpandAp _ t as = return Nothing
+etaExpandAp _ t as = pure Nothing
 -}

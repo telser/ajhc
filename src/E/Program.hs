@@ -61,7 +61,7 @@ progMainEntry prog = combHead . runIdentity $ progComb prog (progMain prog)
 progComb :: Monad m => Program -> Id -> m Comb
 progComb prog x = case x `mlookup`  progCombMap prog of
     Nothing -> fail $ "progComb: can't find '" ++ show (tvrShowName tvr { tvrIdent = x }) ++  "'"
-    Just c -> return c
+    Just c -> pure c
 
 programDs :: Program -> [(TVr,E)]
 programDs prog = [ (t,e)  | Comb { combHead = t,
@@ -92,22 +92,22 @@ programE prog = ELetRec (programDs prog) (EVar (progMainEntry prog))
 programEsMap :: Monad m => Program -> m (Map.Map Name (TVr,E))
 programEsMap prog = do
     let f d@(v,_) = case fromId (tvrIdent v) of
-            Just n -> return (n,d)
+            Just n -> pure (n,d)
             Nothing -> fail $ "Program.programEsMap: top level var with temporary name " ++ show v
     xs <- mapM f (programDs prog)
-    return (Map.fromList xs)
+    pure (Map.fromList xs)
 
 programMapBodies :: Monad m => (E -> m E) -> Program -> m Program
 programMapBodies f prog = do
-    let f' (t,e) = f e >>= \e' -> return (t,e')
+    let f' (t,e) = f e >>= \e' -> pure (t,e')
     programMapDs f' prog
 
 programMapDs :: Monad m => ((TVr, E) -> m (TVr, E)) -> Program -> m Program
 programMapDs f prog = do
     cs <- forM (progCombinators prog) $ \comb -> do
         (t,e) <- f (combHead comb,combBody comb)
-        return . combHead_s t . combBody_s e $ comb
-    return $ progCombinators_s cs prog
+        pure . combHead_s t . combBody_s e $ comb
+    pure $ progCombinators_s cs prog
 
 programMapDs_ :: Monad m => ((TVr,E) -> m ()) -> Program -> m ()
 programMapDs_ f prog = mapM_ f (programDs prog)

@@ -54,7 +54,7 @@ strong dsMap' term = trace ("strong: " ++ show term) $ eval' dsMap term [] where
     dsMap = Map.fromList dsMap'
     etvr ds tvr = do
         t' <- (eval' ds (tvrType tvr) [])
-        return $ tvr { tvrType = t' }
+        pure $ tvr { tvrType = t' }
 
     eval' :: Monad m => Map.Map TVr E -> E -> [E] -> m E
     eval' ds (ELam v body) [] = do
@@ -67,13 +67,13 @@ strong dsMap' term = trace ("strong: " ++ show term) $ eval' dsMap term [] where
         body' <- (eval' ds' body [])
         v' <- etvr ds' v
         check_eta $ EPi v' body'
-    eval' ds e@Unknown [] = return e
-    eval' ds e@ESort {} [] = return e
+    eval' ds e@Unknown [] = pure e
+    eval' ds e@ESort {} [] = pure e
     eval' ds (ELit lc@LitCons { litArgs = es, litType = t }) [] = do
         es' <- mapM (\e -> eval' ds e []) es
         t' <-  (eval' ds t [])
-        return $ ELit $ lc { litArgs = es', litType = t' }
-    eval' ds e@ELit {} [] = return e
+        pure $ ELit $ lc { litArgs = es', litType = t' }
+    eval' ds e@ELit {} [] = pure e
     eval' ds (ELit lc@LitCons { litArgs = es, litType = EPi tb tt }) (t:rest) = eval' ds (ELit lc { litArgs = es ++ [t], litType = subst tb t tt }) rest
     eval' ds (ELit LitCons { litArgs = es, litAliasFor = Just af }) (t:rest) = eval' ds af (es ++ t:rest)
     eval' ds (ELam v body) (t:rest) = eval' ds (subst v t body) rest
@@ -89,8 +89,8 @@ strong dsMap' term = trace ("strong: " ++ show term) $ eval' dsMap term [] where
     eval' ds e@(ELit LitCons {}) stack = unwind ds e stack
     eval' ds (EError s ty) (t:rest) = do
         nt <- eval' ds (EAp ty t) rest
-        return (EError s nt)
-    eval' ds e@EError {} [] = do return e
+        pure (EError s nt)
+    eval' ds e@EError {} [] = do pure e
 
     eval' ds e stack= fail . render $ text "Cannot strong:"
                                       <$> pprint e
@@ -99,10 +99,10 @@ strong dsMap' term = trace ("strong: " ++ show term) $ eval' dsMap term [] where
                                       <$> text "And bindings for:"
                                       <$> pprint ds
 
-    unwind ds t [] = return t
+    unwind ds t [] = pure t
     unwind ds t (t1:rest) = do
         e <-  eval' ds t1 []
         unwind ds (EAp t $ e) rest
 
     -- currently we do not do eta check. etas should only appear for good reason.
-    check_eta x = return x
+    check_eta x = pure x

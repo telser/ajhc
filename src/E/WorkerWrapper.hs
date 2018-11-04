@@ -50,17 +50,17 @@ wrappable dataTable mtvr e@ELam {} = ans where
     g t Demand.Absent | isLifted (EVar t) = (Absent,t)
     g t _ = (Plain,t)
     f (ELam t e) (demand:ss) (Fun x) ts = f e ss x (g t demand:ts)
-    f e _ (Tup n _) ts | isCPR n = return (Just n,e,reverse ts)
-    f e _ (Tag [n]) ts | isCPR n = return (Just n,e,reverse ts)
-    f e _ _ ts | any (not . isPlain . fst) ts = return (Nothing ,e,reverse ts)
+    f e _ (Tup n _) ts | isCPR n = pure (Just n,e,reverse ts)
+    f e _ (Tag [n]) ts | isCPR n = pure (Just n,e,reverse ts)
+    f e _ _ ts | any (not . isPlain . fst) ts = pure (Nothing ,e,reverse ts)
     f _ _ _ _ = fail "not workwrapable"
     isCPR n | isBoxed n, onlyChild dataTable n = True
             | otherwise = False
     isBoxed n = isJust $ do
         Constructor { conInhabits = c } <- getConstructor n dataTable
-        if c == s_Star then return () else do
+        if c == s_Star then pure () else do
         Constructor { conInhabits = c } <- getConstructor c dataTable
-        if c == s_Star then return () else Nothing
+        if c == s_Star then pure () else Nothing
 wrappable _ _ _ = fail "Only lambdas are wrappable"
 
 workerName x = case fromId x of
@@ -92,7 +92,7 @@ workWrap' dataTable tvr e | isJust res = ans where
         f ((Plain,_):rs) = f rs
         f ((Cons c ts,t):rs) = eCase (EVar t) [Alt (updateLit dataTable litCons { litName = conName c, litArgs = snds ts, litType = getType t }) (f (ts ++ rs))] Unknown
     nprops = insert prop_WORKER $ getProperties tvr `intersection` fromList [prop_JOINPOINT, prop_ONESHOT]
-    ans = doTicks >> return ((setProperty prop_WRAPPER tvr,wrapper),(tvr',worker))
+    ans = doTicks >> pure ((setProperty prop_WRAPPER tvr,wrapper),(tvr',worker))
     tvr' = putProperties nprops $ TVr { tvrIdent = workerName (tvrIdent tvr), tvrInfo = mempty, tvrType = wt }
     worker = foldr ELam body' (args' ++ navar) where
         body' = eLetRec lets $ case cname of
@@ -121,11 +121,11 @@ workWrap' dataTable tvr e | isJust res = ans where
         case cname of
             --Just n -> mtick ("E.Workwrap.CPR.{" ++ tvrShowName tvr ++ "." ++ show n ++ "}")
             Just n -> mtick ("E.Workwrap.CPR.{"  ++ show n ++ "}")
-            _ -> return ()
+            _ -> pure ()
         let argw cn (Absent,_) = mtick $ cn ++ ".absent"
             argw cn (Cons n ts,_) = mtick  nname >> mapM_ (argw nname) ts where
                 nname = cn ++ ".{"  ++ show (conName n) ++ "}"
-            argw _ _ = return ()
+            argw _ _ = pure ()
         mapM_ (argw "E.Workwrap.arg") sargs
 workWrap' _dataTable tvr e = fail "not workWrapable"
 
@@ -146,13 +146,13 @@ performWorkWrap dataTable ds = runWriter (wwDs ds) where
             --Stats.mtick a_workWrap
             tell st
             y' <- wwE y
-            return ([ (tx,x), (ty,y') ] :: [(TVr,E)])
+            pure ([ (tx,x), (ty,y') ] :: [(TVr,E)])
         Nothing -> do
             e' <- wwE e
-            return ([(tvr,e')]:: [(TVr,E)])
+            pure ([(tvr,e')]:: [(TVr,E)])
     --wwE :: E -> Stats.StatT Identity E
     wwE ELetRec { eDefs = ds, eBody =  e } = do
         ds' <- wwDs ds
         e' <- wwE e
-        return (ELetRec ds' e')
+        pure (ELetRec ds' e')
     wwE e = emapE' wwE e

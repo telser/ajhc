@@ -83,7 +83,7 @@ discardArgs n (EPi _ b) | n > 0 = discardArgs (n - 1) b
 discardArgs _ _ = error "discardArgs"
 
 tvrName :: Monad m => TVr  -> m Name
-tvrName (TVr {tvrIdent =  n }) | Just a <- fromId n = return a
+tvrName (TVr {tvrIdent =  n }) | Just a <- fromId n = pure a
 tvrName tvr = fail $ "TVr is not Name: " ++ show tvr
 
 tvrShowName :: TVr -> String
@@ -101,40 +101,40 @@ nameConjured mod n = toName TypeConstructor (mod,f n "") where
 fromConjured :: Monad m => Module -> Name -> m E
 fromConjured mod n = maybeM ("fromConjured: " ++ show (mod,n)) $ do
     let f s = funit s `mplus` flam s
-        flam ('^':xs) = do (x,rs) <- f xs; (y,gs) <- f rs; return (EPi tvr { tvrType = x } y,gs)
+        flam ('^':xs) = do (x,rs) <- f xs; (y,gs) <- f rs; pure (EPi tvr { tvrType = x } y,gs)
         flam _ = Nothing
-        funit ('*':xs) = return (eStar,xs)
-        funit ('#':xs) = return (eHash,xs)
-        funit ('!':xs) = return (ESort EBang,xs)
-        funit ('(':'#':')':xs) = return (ESort ETuple,xs)
+        funit ('*':xs) = pure (eStar,xs)
+        funit ('#':xs) = pure (eHash,xs)
+        funit ('!':xs) = pure (ESort EBang,xs)
+        funit ('(':'#':')':xs) = pure (ESort ETuple,xs)
         funit _ = Nothing
-    (TypeConstructor,(mod',an)) <- return $  fromName n
+    (TypeConstructor,(mod',an)) <- pure $  fromName n
     guard (mod' == mod)
     (r,"") <- f an
-    return r
+    pure r
 
 isBottom EError {} = True
 isBottom _ = False
 
 caseBodiesMapM :: Monad m => (E -> m E) -> E -> m E
 caseBodiesMapM f ec@ECase { eCaseAlts = as, eCaseDefault = d } = do
-    let g (Alt l e) = f e >>= return . Alt l
+    let g (Alt l e) = f e >>= pure . Alt l
     as' <- mapM g as
     d' <- T.mapM f d
-    return $ caseUpdate ec { eCaseAlts = as', eCaseDefault = d' }
+    pure $ caseUpdate ec { eCaseAlts = as', eCaseDefault = d' }
 caseBodiesMapM _ _ = error "caseBodiesMapM"
 
 caseBodiesMap :: (E -> E) -> E -> E
-caseBodiesMap f ec = runIdentity $ caseBodiesMapM (\x -> return $ f x) ec
+caseBodiesMap f ec = runIdentity $ caseBodiesMapM (\x -> pure $ f x) ec
 
 eToList :: Monad m => E -> m  [E]
-eToList (ELit LitCons { litName = n, litArgs = [e,b] }) | dc_Cons == n = eToList b >>= \x -> return (e:x)
-eToList (ELit LitCons { litName = n, litArgs = [] }) | dc_EmptyList == n = return []
+eToList (ELit LitCons { litName = n, litArgs = [e,b] }) | dc_Cons == n = eToList b >>= \x -> pure (e:x)
+eToList (ELit LitCons { litName = n, litArgs = [] }) | dc_EmptyList == n = pure []
 eToList _ = fail "eToList: not list"
 
-toString (ELit LitCons { litName = n, litArgs = [], litType = t }) = if dc_EmptyList == n && t == tString then return "" else fail "not a string"
+toString (ELit LitCons { litName = n, litArgs = [], litType = t }) = if dc_EmptyList == n && t == tString then pure "" else fail "not a string"
 toString x = eToList x >>= mapM fromChar where
-    fromChar (ELit LitCons { litName = dc, litArgs = [ELit (LitInt ch t)] }) | dc == dc_Char = return (chr $ fromIntegral ch)
+    fromChar (ELit LitCons { litName = dc, litArgs = [ELit (LitInt ch t)] }) | dc == dc_Char = pure (chr $ fromIntegral ch)
     fromChar _ = fail "fromChar: not char"
 
 ltTuple ts = ELit $ litCons { litName = nameTuple TypeConstructor (length ts), litArgs = ts, litType = eStar }
@@ -146,7 +146,7 @@ p_toTag = primPrim "toTag"
 p_fromTag = primPrim "fromTag"
 
 fromUnboxedTuple :: Monad m => E -> m [E]
-fromUnboxedTuple (ELit LitCons { litName = n, litArgs = as }) | Just _ <- fromUnboxedNameTuple n = return as
+fromUnboxedTuple (ELit LitCons { litName = n, litArgs = as }) | Just _ <- fromUnboxedNameTuple n = pure as
 fromUnboxedTuple _ = fail "fromUnboxedTuple: not a tuple"
 
 isUnboxedTuple m = isJust (fromUnboxedTuple m)

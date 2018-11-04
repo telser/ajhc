@@ -44,12 +44,12 @@ instance Functor TTyp where
     fmap f (TCPR xs) = TCPR $ map (fmap f) xs
 
 instance FunctorM TAnot where
-    fmapM f (TAnot l t) = do l <- f l; t <- fmapM f t; return $ TAnot l t
+    fmapM f (TAnot l t) = do l <- f l; t <- fmapM f t; pure $ TAnot l t
 
 instance FunctorM TTyp where
-    fmapM _ TAtomic = return TAtomic
-    fmapM f (x `TFun` y) = do x <- fmapM f x; y <- fmapM f y; return $ x `TFun` y
-    fmapM f (TCPR xs) = do xs <- mapM (fmapM f) xs; return $ TCPR xs
+    fmapM _ TAtomic = pure TAtomic
+    fmapM f (x `TFun` y) = do x <- fmapM f x; y <- fmapM f y; pure $ x `TFun` y
+    fmapM f (TCPR xs) = do xs <- mapM (fmapM f) xs; pure $ TCPR xs
 
 instance Show l => Show (TAnot l) where
     showsPrec d (TAnot l typ) = showParen (d > 10) $ showsPrec 11 typ . showString "^" . showsPrec 11 l
@@ -76,7 +76,7 @@ newVar :: IM Var
 newVar = do
     v <- get
     put (v + 1)
-    return (V v)
+    pure (V v)
 
 newtype ShowString = ShowString String
 
@@ -110,7 +110,7 @@ collect :: Typ -> [(Var,Variance)]
 collect t = execWriter $ f Positive t where
     f p (TAnot (CJust v) t) = tell [(fromCA v,p)] >> g p t
     f p (TAnot _ t) = g p t
-    g p TAtomic = return ()
+    g p TAtomic = pure ()
     g p (x `TFun` y) = f (flipVariance p) x >> f p y
 
 {-# NOINLINE analyzeProgram #-}
@@ -132,7 +132,7 @@ analyzeProgram prog = do
 --                        ResultJust True -> CTrue
 --                        ResultJust False -> CFalse
 --                        ResultBounded a _ _ -> CJust (fromCA a)
---                return (fromCA cv, rr )
+--                pure (fromCA cv, rr )
 --            let mp :: Map.Map Var (CV Var)
 --                mp = Map.fromList rs
 --                zz (CJust x) | Just y <- Map.lookup x (Map.fromList rs) = y
@@ -148,12 +148,12 @@ analyzeProgram prog = do
 --                print (fromCA cv,fmap fromCA res)
 --            --print (fmap (zz . CJust . fromCA) cc)
 
-    return ()
+    pure ()
 
 runIM :: MonadIO m => IM a -> m (Constraints,a)
 runIM (IM s) = do
     (a,_,c) <- liftIO $ runRWST s mempty 1
-    return (c,a)
+    pure (c,a)
 
 atom = TAnot lazy TAtomic
 
@@ -161,37 +161,37 @@ mkVar :: IM (CV (CA Var))
 mkVar = do
     v <- newVar
     ca <- mkCA v
-    return (CJust ca)
+    pure (CJust ca)
 
 infer :: E -> IM (Typ,E)
 infer e@(ELit l) = do
-    return (TAnot strict TAtomic,e)
-    --return (atom,e)
+    pure (TAnot strict TAtomic,e)
+    --pure (atom,e)
 infer e@EPi {} = do
-    return (TAnot strict TAtomic,e)
-    --return (atom,e)
+    pure (TAnot strict TAtomic,e)
+    --pure (atom,e)
 infer (EVar tvr) = do
     env <- ask
     case mlookup (tvrIdent tvr) env `mplus` Info.lookup (tvrInfo tvr) of
         Nothing -> do
             -- guess a pessimistic type if we know nothing about a variable
             t <- guessType (tvrType tvr)
-            return (t,EVar tvr)
-        Just t -> return (t,EVar tvr)
+            pure (t,EVar tvr)
+        Just t -> pure (t,EVar tvr)
 infer (EPrim p xs t) = do
     ts <- mapM infer xs
     v <- mkVar
     mapM_ (\ (TAnot t _) -> tell (v `islte` t)) (map fst ts)
-    return (TAnot v TAtomic,EPrim p (map snd ts) t)
+    pure (TAnot v TAtomic,EPrim p (map snd ts) t)
 infer (EError s t) = do
     v <- mkVar
-    return (TAnot v TAtomic,EError s t)
+    pure (TAnot v TAtomic,EError s t)
 infer (ELam x@TVr {tvrType = t1} m) = do
     s1 <- freshAnot t1
     (s2,e) <- local (minsert (tvrIdent x) s1) $
         infer m
     v <- mkVar
-    return (TAnot strict $ s1 `TFun` s2,ELam x e)
+    pure (TAnot strict $ s1 `TFun` s2,ELam x e)
 infer ec@ECase {} = do
     nv <- mkVar
     (TAnot t _,e') <- infer (eCaseScrutinee ec)
@@ -199,7 +199,7 @@ infer ec@ECase {} = do
     ((ty:tys) ,ec) <- caseBodiesMapM' infer ec
     (TAnot res rt) <- foldM freshGLB ty tys
     tell (nv `implies` res)
-    return (TAnot nv rt,ec { eCaseScrutinee = e' })
+    pure (TAnot nv rt,ec { eCaseScrutinee = e' })
 infer (EAp a b) = do
     (TAnot k (s1 `TFun` (TAnot rst s2)),a) <- infer a
     (s1'@(TAnot zz _),b) <- infer b
@@ -208,18 +208,18 @@ infer (EAp a b) = do
     -- the function is strict if we are strict
     tell (res `implies` k)
     tell (res `implies` rst)
-    return (TAnot res s2,EAp a b)
+    pure (TAnot res s2,EAp a b)
 --infer (ELetRec ds e) = do
 
 infer e = fail $ "infer: unsupported\n" ++ show e
 
 caseBodiesMapM' :: Monad m => (E -> m (t,E)) -> E -> m ([t],E)
 caseBodiesMapM' f ec@ECase { eCaseAlts = as, eCaseDefault = d } = do
-    let g (Alt l e) = do (t,e) <- f e ; return (t,Alt l e)
+    let g (Alt l e) = do (t,e) <- f e ; pure (t,Alt l e)
     as' <- mapM g as
     d' <- fmapM f d
     let ts = fsts as' ++ maybe [] ((:[]) . fst) d'
-    return $ (ts,ec { eCaseAlts = snds as', eCaseDefault = fmap snd d' })
+    pure $ (ts,ec { eCaseAlts = snds as', eCaseDefault = fmap snd d' })
 caseBodiesMapM' _ _ = error "caseBodiesMapM'"
 
 -- | pessimistic guess of type for variables we know nothing about.
@@ -228,25 +228,25 @@ guessType (EPi TVr {tvrType = t1 } t2) = do
     TAnot _ t1 <- guessType t1
     t2 <- guessType t2
     v <- mkVar
-    return (TAnot v $ TAnot lazy t1 `TFun` t2)
+    pure (TAnot v $ TAnot lazy t1 `TFun` t2)
 guessType _ = do
     v <- mkVar
-    return (TAnot v TAtomic)
+    pure (TAnot v TAtomic)
 
 freshAnot (EPi TVr {tvrType = t1 } t2) = do
     t1 <- freshAnot t1
     t2 <- freshAnot t2
     v <- mkVar
-    return (TAnot v $  t1 `TFun` t2)
+    pure (TAnot v $  t1 `TFun` t2)
 freshAnot _ = do
     v <- mkVar
-    return (TAnot v TAtomic)
+    pure (TAnot v TAtomic)
 
 freshGLB (TAnot k1 TAtomic) (TAnot k2 TAtomic) = do
     v <- mkVar
     tell (v `islte` k1)
     tell (v `islte` k2)
-    return (TAnot v TAtomic)
+    pure (TAnot v TAtomic)
 
 freshGLB (TAnot k1 (TFun a1 b1)) (TAnot k2 (TFun a2 b2)) = do
     v <- mkVar
@@ -254,13 +254,13 @@ freshGLB (TAnot k1 (TFun a1 b1)) (TAnot k2 (TFun a2 b2)) = do
     tell (v `islte` k2)
     a <- freshLUB a1 a2
     b <- freshGLB a2 b2
-    return (TAnot v (TFun a b))
+    pure (TAnot v (TFun a b))
 
 freshLUB (TAnot k1 TAtomic) (TAnot k2 TAtomic) = do
     v <- mkVar
     tell (v `isgte` k1)
     tell (v `isgte` k2)
-    return (TAnot v TAtomic)
+    pure (TAnot v TAtomic)
 
 freshLUB (TAnot k1 (TFun a1 b1)) (TAnot k2 (TFun a2 b2)) = do
     v <- mkVar
@@ -268,12 +268,12 @@ freshLUB (TAnot k1 (TFun a1 b1)) (TAnot k2 (TFun a2 b2)) = do
     tell (v `isgte` k2)
     a <- freshLUB a1 a2
     b <- freshGLB a2 b2
-    return (TAnot v (TFun a b))
+    pure (TAnot v (TFun a b))
 
 subs (x1 `TFun` y2) (x3 `TFun` y4) = do
     x3 `subsA` x1
     y2 `subsA` y4
-subs TAtomic TAtomic = return ()
+subs TAtomic TAtomic = pure ()
 
 subsA (TAnot a t1) (TAnot b t2) = do
     tell (a `islte` b)

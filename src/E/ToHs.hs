@@ -61,7 +61,7 @@ compileToHs prog = do
     progress ("Running: " ++ comm)
     r <- System.system comm
     when (r /= System.ExitSuccess) $ fail "Hs code did not compile."
-    return ()
+    pure ()
 
 cTypeInfoT (ELit LitCons { litAliasFor = Just af }) = cTypeInfoT af
 cTypeInfoT (ELit LitCons { litName = n }) | (RawType,t) <- fromName n = cTypeInfo t
@@ -119,7 +119,7 @@ transDataTable dataTable ns = vcat (theType:map g (lefts wtd)) where
     f w@(n,nn,tl) = case (nameType n,tl) of
         (DataConstructor,False) -> Set.fromList $ do
             c <- getConstructor n dataTable
-            return (Left $ conInhabits c)
+            pure (Left $ conInhabits c)
         (TypeConstructor,True) -> Set.singleton (Left n)
         (TypeConstructor,False) -> Set.singleton (Right (n,nn))
         (RawType,_) -> Set.empty
@@ -167,7 +167,7 @@ newtype TM a = TM { fromTM :: RWST Environment Collect Int IO a }
 mparen xs = do
     Env { envParen = p } <- ask
     x <- local (\e -> e { envParen = True }) xs
-    if p then return $ parens x else return x
+    if p then pure $ parens x else pure x
 
 nparen xs = do local (\e -> e { envParen = True }) xs
 
@@ -198,53 +198,53 @@ showCName c = text $ case nameType c of
     n -> 'U':mangleIdent (show n ++ "_" ++ show c)
 
 transType :: E -> TM Doc
-transType e | typeLike e = return $ text "Type"
+transType e | typeLike e = pure $ text "Type"
 transType (EPi TVr {tvrType = a } b) = local (\e -> e { envType = True }) $ mparen $ do
     a <- transType a
     b <- transType b
-    return $ a <+> text "->" <+> b
+    pure $ a <+> text "->" <+> b
 transType (ELit LitCons { litArgs = es, litAliasFor = Just af }) = transType (foldl eAp af es)
 transType (ELit LitCons { litName = c, litArgs =  ts }) = nparen $ do
     Env { envType = inType } <- ask
     tell mempty { collNames = Set.singleton (c,length ts,inType) }
     ts <- mapM transType ts
-    return $ showCon c ts
-transType e = return $ text "{- ERROR " <> tshow e <> text " -} Type"
+    pure $ showCon c ts
+transType e = pure $ text "{- ERROR " <> tshow e <> text " -} Type"
 
 typeLike (ESort EStar) = True
 typeLike (EPi TVr { tvrType = a } b) = typeLike a && typeLike b
 typeLike _ = False
 
 transE :: E -> TM Doc
-transE (EError s _) = mparen $ return (text "error" <+> tshow s)
-transE (EError s _) = mparen $ return (text "error__" <+> tshow s <> text "#" <+> text "`seq`" <+> text "undefined")
+transE (EError s _) = mparen $ pure (text "error" <+> tshow s)
+transE (EError s _) = mparen $ pure (text "error__" <+> tshow s <> text "#" <+> text "`seq`" <+> text "undefined")
 transE (ELit (LitInt num t)) = case cTypeInfoT t of
-    ("Char#",_,_) -> return $ text (show $ chr $ fromIntegral num) <> text "#"
-    ("Int#",_,_)  | num < 0 -> mparen $ return $ text (show num) <> text "#"
-                  | otherwise -> return $ text (show num) <> text "#"
-    ("Addr#",_,_) | num == 0 -> return $ text "nullAddr#"
-                  | otherwise -> mparen $ return $ text "int2Addr#" <+> text (show num) <> text "#"
+    ("Char#",_,_) -> pure $ text (show $ chr $ fromIntegral num) <> text "#"
+    ("Int#",_,_)  | num < 0 -> mparen $ pure $ text (show num) <> text "#"
+                  | otherwise -> pure $ text (show num) <> text "#"
+    ("Addr#",_,_) | num == 0 -> pure $ text "nullAddr#"
+                  | otherwise -> mparen $ pure $ text "int2Addr#" <+> text (show num) <> text "#"
     ("Word#",_,_) -> mparen $ text "int2Word# (" <> tshow num <> text "# )"
 transE (ELit LitCons { litName = c, litArgs =  ts }) = nparen $ do
     Env { envType = inType } <- ask
     tell mempty { collNames = Set.singleton (c,length ts,inType) }
     ts <- mapM transE ts
-    return $ showCon c ts
+    pure $ showCon c ts
 transE ee | (e,ts@(_:_)) <- fromLam ee  = mparen $ do
     ts' <- mapM transTVr ts
     e <- noParens $ transE e
-    return $ text "\\" <> hsep ts' <+> text "->" <+> e
+    pure $ text "\\" <> hsep ts' <+> text "->" <+> e
 transE (EVar tvr) = do
     --env <- asks envCoerce
     t <- transTVr tvr
     --case tvrIdent tvr `member` env of
     case hasBoxes (tvrType tvr) of
-        False -> return t
-        True -> mparen $ return $ text "unsafeCoerce#" <+> t
+        False -> pure t
+        True -> mparen $ pure $ text "unsafeCoerce#" <+> t
 transE ee | (e,es@(_:_)) <- fromAp ee = mparen $ do
     e <- transE e
     es <- mapM transE es
-    return (hsep (e:es))
+    pure (hsep (e:es))
 transE ELetRec { eDefs = ds, eBody = e } = mparen $ do
     --local (\e -> e { envCoerce = envCoerce e `mappend` fromList [ tvrIdent t | (t,_) <- ds, hasBoxes (tvrType t)] }) $ do
     ds' <- flip mapM ds $ \ (tvr,e) -> do
@@ -256,14 +256,14 @@ transE ELetRec { eDefs = ds, eBody = e } = mparen $ do
             False -> noParens $ transE b
             True -> do
                 t <- transE b
-                return $ text "unsafeCoerce#" <+> t
-        return (t <+> text "::" <+> tt <> semi $$ hsep (t:bs) <+> text "=" <+> e)
+                pure $ text "unsafeCoerce#" <+> t
+        pure (t <+> text "::" <+> tt <> semi $$ hsep (t:bs) <+> text "=" <+> e)
     e <- noParens $ transE e
-    return (text "let {" $$ nest 4 (vcat (punctuate (text ";") ds')) $$ text "} in" <+> e)
+    pure (text "let {" $$ nest 4 (vcat (punctuate (text ";") ds')) $$ text "} in" <+> e)
 transE ECase { eCaseBind = TVr { tvrIdent = 0, tvrType = tt }, eCaseScrutinee = scrut, eCaseDefault = Just body, eCaseAlts = [] } | isLifted tt = mparen $ do
     scrut <- transE scrut
     body <- transE body
-    return (scrut <+> text "`seq`" <+> body)
+    pure (scrut <+> text "`seq`" <+> body)
 transE ECase { eCaseBind = bind, eCaseScrutinee = scrut, eCaseDefault = md, eCaseAlts = as } = mparen $ do
     scrut <- noParens $ transE scrut
     let dobind = 0 /= tvrIdent bind
@@ -272,37 +272,37 @@ transE ECase { eCaseBind = bind, eCaseScrutinee = scrut, eCaseDefault = md, eCas
     let md' = flip fmap md $ \e ->  b <+> text "->" <+> if dobind && isLifted (getType bind) then text "seq" <+> b <+> e else e
     as <- mapM (transAlt dobind b) as
     let alts = as ++ maybeToMonad md'
-    return (text "case" <+> scrut <+> text "of {" $$ nest 4  (vcat (punctuate semi alts)) $$ text "}")
+    pure (text "case" <+> scrut <+> text "of {" $$ nest 4  (vcat (punctuate semi alts)) $$ text "}")
 transE e | Just (e',_) <- from_unsafeCoerce e = mparen $ do
     e' <- transE e'
-    return (text "unsafeCoerce#" <+> e')
+    pure (text "unsafeCoerce#" <+> e')
 transE e@(EPrim (APrim (PrimPrim prim) _) args _) = case (unpackPS prim,args) of
     ("dependingOn",[x,_y])   -> transE x  -- XXX
-    (fs,args) | Just ghcprim <- lookup fs ghcPrimTable -> mparen $ mapM transE args >>= \args' -> return $ hsep (text ghcprim:args')
-    _ -> mparen $ return $ text "error" <+> tshow ("ToHs.Error: " ++ show e)
+    (fs,args) | Just ghcprim <- lookup fs ghcPrimTable -> mparen $ mapM transE args >>= \args' -> pure $ hsep (text ghcprim:args')
+    _ -> mparen $ pure $ text "error" <+> tshow ("ToHs.Error: " ++ show e)
 --transE (EPrim (APrim Operator { primOp = "-", primRetType = rt } _) [x] _) = mparen $ do
 --    x <- transE x
---    return (hsep [text "negateInt#",x])
+--    pure (hsep [text "negateInt#",x])
 --transE (EPrim (APrim Operator { primOp = op, primRetType = rt } _) [x,y] _) | Just z <- op2Table (op,rt) = mparen $ do
 --    x <- transE x
 --    y <- transE y
---    return (hsep [text z,x,y])
+--    pure (hsep [text z,x,y])
 --transE (EPrim (APrim Operator { primOp = op, primArgTypes = [at,_] } _) [x,y] _) | Just z <- op2TableCmp (op,showCType at) = mparen $ do
 --    x <- transE x
 --    y <- transE y
---    return $ text "fromBool" <+> (parens $ hsep [text z,x,y])
-transE (EPrim (APrim CConst { primConst = ('"':rs) } _) [] _) = return (text ('"':rs) <> text "#")
-transE (EPrim (APrim (PrimString ss)  _) [] _) = return (tshow ss <> text "#")
+--    pure $ text "fromBool" <+> (parens $ hsep [text z,x,y])
+transE (EPrim (APrim CConst { primConst = ('"':rs) } _) [] _) = pure (text ('"':rs) <> text "#")
+transE (EPrim (APrim (PrimString ss)  _) [] _) = pure (tshow ss <> text "#")
 transE (EPrim (APrim PrimTypeInfo { primArgType = at, primTypeInfo = c }  _) [] _) = ans where
     Just pi = primitiveInfo at
     ans = case c of
-        PrimSizeOf -> return $ tshow (primTypeSizeOf pi) <> char '#'
+        PrimSizeOf -> pure $ tshow (primTypeSizeOf pi) <> char '#'
 
 transE (EPrim (APrim Peek { primArgType = at } _) [w,x] _) = mparen ans where
     ans = do
         w <- transE w
         x <- transE x
-        return (text func <+> x <+> text "0#" <+> w)
+        pure (text func <+> x <+> text "0#" <+> w)
     (tt,_,_) = cTypeInfo at
     Just pi = primitiveInfo at
     size = primTypeSizeOf pi * 8
@@ -316,7 +316,7 @@ transE (EPrim (APrim Peek { primArgType = at } _) [x] (ELit LitCons { litName = 
     ans = do x <- ans'; castVal at (show n) x
     ans' = mparen $ do
         x <- transE x
-        return (text func <+> x <+> text "0#")
+        pure (text func <+> x <+> text "0#")
     (tt,_,_) = cTypeInfo at
     Just pi = primitiveInfo at
     size = primTypeSizeOf pi * 8
@@ -331,7 +331,7 @@ transE (EPrim (APrim Poke { primArgType = at } _) [w,ptr,v] _) = mparen ans wher
         w <- transE w
         ptr <- transE ptr
         v <- transE v
-        return (text func <+> ptr <+> text "0#" <+> v <+> w)
+        pure (text func <+> ptr <+> text "0#" <+> v <+> w)
     Just pi = primitiveInfo at
     size = primTypeSizeOf pi * 8
     sign = primTypeIsSigned pi
@@ -343,15 +343,15 @@ transE (EPrim (APrim Poke { primArgType = at } _) [w,ptr,v] _) = mparen ans wher
         "Word#" -> "writeWord" ++ show size ++ "OffAddr#"
 transE (EPrim (APrim (AddrOf addr) _) [] _) = mparen $ do
     tell mempty { collPrims = Set.singleton (AddrOf addr) }
-    return (text $ "unPtr addr_" ++ mangleIdent (unpackPS addr))
+    pure (text $ "unPtr addr_" ++ mangleIdent (unpackPS addr))
 
 transE (EPrim (APrim func@Func {} _) xs _) = mparen $ do
     tell mempty { collPrims = Set.singleton func }
     xs <- mapM transE xs
-    return (hsep (text (cfuncname func):xs))
+    pure (hsep (text (cfuncname func):xs))
 --transE (EPrim (APrim cast@CCast { primArgType = at, primRetType = rt } _) [x] _) = mparen $ transE x >>= \x ->  castVal at rt x
 
-transE e = mparen $ return $ text "error" <+> tshow ("ToHs.Error: " ++ show e)
+transE e = mparen $ pure $ text "error" <+> tshow ("ToHs.Error: " ++ show e)
 
 ghcPrimTable = [
     ("newWorld__","newWorld__"),
@@ -370,8 +370,8 @@ ghcPrimTable = [
 
 castVal :: ExtType -> ExtType -> Doc -> TM Doc
 castVal at rt x = case (showCType at,showCType rt) of
-        (a,b) | a == b -> return x
-        z | Just co <- lookup z coercions -> mparen $ return (text co <+> x)
+        (a,b) | a == b -> pure x
+        z | Just co <- lookup z coercions -> mparen $ pure (text co <+> x)
         xs -> fail $ "unknown coercion: " ++ show xs
     where
     coercions = [
@@ -390,7 +390,7 @@ castVal at rt x = case (showCType at,showCType rt) of
 cfuncname Func { funcName = fn, funcIOLike = iol, primArgTypes = as, primRetType = r  } =  text $ ("func_" ++ (if iol then "io" else "pure") ++ "_" ++ unpackPS fn ++ intercalate "_" (r:as))
 
 hasBoxes e = or $ execWriter (f e) where
-    f e | e == tBox = tell [True] >> return e
+    f e | e == tBox = tell [True] >> pure e
     f e = emapEGH f f f e
 
 op2Table (op,rt) = lookup (showCType rt) table >>= lookup op where
@@ -447,22 +447,22 @@ transAlt dobind b (Alt LitInt { litNumber = i, litType = tt } e) = do
     let (t,_,_) = cTypeInfoT tt
     e <- noParens $ transE e
     case t of
-        "Int#" -> return $ (if dobind then b <> char '@' else empty) <> tshow i <> text "#" <+> text "->" <+> e
-        "Char#" -> return $ (if dobind then b <> char '@' else empty) <> text (show $ chr $ fromIntegral i) <> text "#" <+> text "->" <+> e
+        "Int#" -> pure $ (if dobind then b <> char '@' else empty) <> tshow i <> text "#" <+> text "->" <+> e
+        "Char#" -> pure $ (if dobind then b <> char '@' else empty) <> text (show $ chr $ fromIntegral i) <> text "#" <+> text "->" <+> e
         _ -> do
             let bvar = if dobind then b else text "_bvar"
                 Just eq = op2TableCmp ("==",t)
             v <- transE (ELit (LitInt i tt))
-            return (bvar <+> text "|" <+> text eq <+> bvar <+> v <+> text "->" <+> e)
+            pure (bvar <+> text "|" <+> text eq <+> bvar <+> v <+> text "->" <+> e)
 transAlt dobind b (Alt LitCons { litName = c, litArgs = ts } e) = do
     tell mempty { collNames = Set.singleton (c,length ts,False) }  -- XXX this shouldn't be needed
     ts <- mapM transTVr ts
     e <- noParens $ transE e
-    return ( (if dobind then b <> char '@' else empty) <> showCon c ts <+> text "->" <+> e)
+    pure ( (if dobind then b <> char '@' else empty) <> showCon c ts <+> text "->" <+> e)
 
 transTVr :: TVr -> TM Doc
-transTVr TVr { tvrIdent = 0 } = return $ char '_'
-transTVr tvr = return (text $ 'v':mangleIdent (pprint tvr))
+transTVr TVr { tvrIdent = 0 } = pure $ char '_'
+transTVr tvr = pure (text $ 'v':mangleIdent (pprint tvr))
 
 mangleIdent xs =  concatMap f xs where
         f '.' = "__"

@@ -40,30 +40,30 @@ atomizeApps ::
     -> Program
     -> Program
 atomizeApps atomizeTypes prog = ans where
-    Identity ans = programMapBodies (return . atomizeAp mempty atomizeTypes (progDataTable prog)) prog
+    Identity ans = programMapBodies (pure . atomizeAp mempty atomizeTypes (progDataTable prog)) prog
 
 atomizeAp :: IdSet -> Bool -> DataTable -> E -> E
 atomizeAp inscope atomizeTypes dataTable e = runReader (f e) inscope where
     f ELetRec { eDefs = [], eBody = e } = f e
-    f ep@(ELam TVr { tvrIdent = i } _) = local (insert i) $ emapEG f return ep
-    f el@ELetRec { eDefs = ds } = local (`mappend` fromList (map (tvrIdent . fst) ds)) $ emapEG f return el
-    f ec@ECase {} = local (`mappend` fromList (map tvrIdent (caseBinds ec))) $ emapEG f return ec
+    f ep@(ELam TVr { tvrIdent = i } _) = local (insert i) $ emapEG f pure ep
+    f el@ELetRec { eDefs = ds } = local (`mappend` fromList (map (tvrIdent . fst) ds)) $ emapEG f pure el
+    f ec@ECase {} = local (`mappend` fromList (map tvrIdent (caseBinds ec))) $ emapEG f pure ec
     f (ELit lc@LitCons { litArgs = xs }) = mapM f xs >>= dl (\xs -> ELit lc { litArgs = xs })
     f ep@(EPi tvr@TVr {tvrIdent = i, tvrType = t} b) | i == emptyId || i `notMember` freeIds b  = do
         t <- f t
         b <- f b
         dl (\ [t,b] -> EPi tvr { tvrIdent = emptyId, tvrType = t } b) [t,b]
-    f ep@(EPi  TVr { tvrIdent = i } _) = local (insert i) $ emapEG f return ep
+    f ep@(EPi  TVr { tvrIdent = i } _) = local (insert i) $ emapEG f pure ep
     f (EPrim n xs t) = mapM f xs >>= dl (\xs -> EPrim n xs t)
     f e = case fromAp e of
         (x,xs) -> do
-            x <- emapEG f return x
+            x <- emapEG f pure x
             mapM f xs >>= dl (\xs -> foldl EAp x xs)
     dl build xs = do
         (fn,xs') <- h xs
-        return $ fn (build xs')
+        pure $ fn (build xs')
     h :: [E] -> Reader IdSet (E -> E,[E])
-    h (e:es) | isAtomic e = h es >>= \ (fn,es') -> return (fn,e:es')
+    h (e:es) | isAtomic e = h es >>= \ (fn,es') -> pure (fn,e:es')
     h (e:es) = do
         fvs <- ask
         let (var:_) = [ i | i <- newIds fvs]
@@ -71,8 +71,8 @@ atomizeAp inscope atomizeTypes dataTable e = runReader (f e) inscope where
             tv = tvr { tvrIdent = var, tvrType = tvt }
             fn = if getType tvt == eHash then eStrictLet tv e else eLetRec [(tv,e)]
         (fn',es') <- local (insert var) (h es)
-        return (fn . fn',EVar tv:es')
-    h [] = return (id,[])
+        pure (fn . fn',EVar tv:es')
+    h [] = pure (id,[])
     isAtomic :: E -> Bool
     isAtomic EVar {}  = True
 --    isAtomic (EAp e v) | not atomizeTypes && isAtomic e && sortTypeLike v = True
@@ -105,8 +105,8 @@ programFloatInward prog = do
     let mstats = mconcat [ Stats.singleton $ "FloatInward.{" ++ pprint n ++ "}" | n <- map combHead $ dsBinds (concat pints)]
         mstats' = mconcat [ Stats.singleton $ "FloatInward.all.{" ++ pprint n ++ "}" | n <- map combHead $ dsBinds oall]
         nstats = progStats prog `mappend` mstats `mappend` mstats'
-    --nprog <- programMapBodies (return . floatInward) nprog
-    return nprog { progStats = nstats }
+    --nprog <- programMapBodies (pure . floatInward) nprog
+    pure nprog { progStats = nstats }
 
 --cupbinds bs = f bs where
 --    f (Left ((t,_),fv):rs) = (tvrShowName t,fv):f rs
@@ -226,40 +226,40 @@ floatOutward prog = do
                     ts' = [(tvrInfo_u (Info.insert cl . Info.insert n') t,g imap' n e) |  (t,e) <- ts]
                     imap' = Map.fromList [ (tvrIdent t,n') | t <- fsts ts] `Map.union` imap
                 dds [] nrs e imap = ELetRec (concat nrs) (g imap n e)
-            gg e = runIdentity $ (emapE' (\e -> return $ gg e) e)
+            gg e = runIdentity $ (emapE' (\e -> pure $ gg e) e)
     let imap = Map.fromList $ map (\x -> (x,top_level)) ([ tvrIdent t| (t,_) <-  programDs prog ] ++
             idSetToList (progExternalNames prog `mappend` progSeasoning prog))
     prog <- flip programMapDs prog (\ (t,e) -> do
         e' <- letBindAll (progDataTable prog) (progModule prog) e
-        return $ tl (t,e') imap)
+        pure $ tl (t,e') imap)
 
     -- perform floating based on previous annotations
     let dofloat ELetRec { eDefs = ds, eBody = e } = do
             e' <- dofloat e
             ds' <- mapM df ds
-            return (ELetRec (concat ds') e')
+            pure (ELetRec (concat ds') e')
         dofloat e@ELam {} = do
             let (b,ts) = fromLam e
                 Just ln = Info.lookup (tvrInfo (head ts))
             (b',fs) <- censor (const []) $ listen (dofloat b)
             let (dh,de) = partition (\ (ll,bn) -> succ ll == ln) fs
             tell de
-            return $ letRec (snds dh) (foldr ELam b' ts)
+            pure $ letRec (snds dh) (foldr ELam b' ts)
         dofloat e = emapE' dofloat e
         df (t,e) | Just (CLevel cl) <- lcl, cl /= nl = ans where
             ans = do
                 e' <- dofloat e
                 mtick $ "LetFloat.Full-Lazy.float.{" ++ maybeShowName t
                 tell [(nl,(t,e'))]
-                return []
+                pure []
             lcl = Info.lookup (tvrInfo t)
             Just nl = Info.lookup (tvrInfo t)
         df (t,e) = do
             e' <- dofloat e
-            return [(t,e')]
+            pure [(t,e')]
 --        dtl (t,ELetRec ds e) = do
 --            (e',fs) <- runWriterT (dofloat e)
---            return $ (t,e'):snds fs
+--            pure $ (t,e'):snds fs
         dtl comb = do
             (e,fs) <- runWriterT (dofloat $ combBody comb)
             let (e',fs') = case e of
@@ -276,10 +276,10 @@ floatOutward prog = do
             let (fs''',sm') = unzip [ ((n,sm e),(t,EVar n)) | (t,e) <- fs'', let n = nn t ]
                 sm = substLet sm'
                 nn tvr = tvr { tvrIdent = toId $ lfName u (progModule prog) Val (tvrIdent tvr) }
-            return $ combBody_s (sm e'') comb:map bindComb fs'''
+            pure $ combBody_s (sm e'') comb:map bindComb fs'''
     (cds,stats) <- runStatT (mapM dtl $ progCombinators prog)
     let nprog = progCombinators_s (concat cds) prog
-    return nprog { progStats = progStats nprog `mappend` stats }
+    pure nprog { progStats = progStats nprog `mappend` stats }
 
 maybeShowName t = if '@' `elem` n then "(epheremal)" else n where
     n = tvrShowName t
@@ -300,27 +300,27 @@ letBindAll  dataTable modName e = f e  where
     f ELetRec { eDefs = ds, eBody = e } = do
         ds' <- mapMSnd f ds
         e' <- g e
-        return $ ELetRec ds' e'
+        pure $ ELetRec ds' e'
     f ec@ECase {} = do
         let mv = case eCaseScrutinee ec of
                 EVar v -> subst (eCaseBind ec) (EVar v)
                 _ -> id
         ec' <- caseBodiesMapM (fmap mv . g) ec
         scrut' <- g (eCaseScrutinee ec)
-        return $ caseUpdate ec' { eCaseScrutinee = scrut' }
+        pure $ caseUpdate ec' { eCaseScrutinee = scrut' }
     f e@ELam {} = do
         let (b,ts) = fromLam e
         b' <- g b
-        return (foldr ELam b' ts)
+        pure (foldr ELam b' ts)
     f e = emapE' f e
-    g e | notFloatOut e = return e
-    g e | isUnboxed (getType e) = return e
+    g e | notFloatOut e = pure e
+    g e | isUnboxed (getType e) = pure e
     g e = do
         u <- newUniq
         let n = toName Val (show modName,"af@" ++ show u)
             tv = tvr { tvrIdent = toId n, tvrType = infertype dataTable e }
         e' <- f e
-        return (ELetRec [(tv,e')] (EVar tv))
+        pure (ELetRec [(tv,e')] (EVar tv))
 
 letRec [] e = e
 letRec ds _ | flint && hasRepeatUnder fst ds = error "letRec: repeated variables!"

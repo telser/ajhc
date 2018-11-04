@@ -118,9 +118,9 @@ cprAnalyze dataTable env e = cprAnalyze' env e where
         (e',val) = cprAnalyze' (envInsert t Top env) e
     cprAnalyze' env ec@(ECase {}) = runWriter (caseBodiesMapM f ec) where
         f e = do
-            (e',v) <- return $ cprAnalyze' env e
+            (e',v) <- pure $ cprAnalyze' env e
             tell v
-            return e'
+            pure e'
     cprAnalyze' env (EAp fun arg) = (EAp fun_cpr arg,res_res) where
         (fun_cpr, fun_res) = cprAnalyze' env fun
         res_res = case fun_res of

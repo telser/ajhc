@@ -28,39 +28,39 @@ choose as = do
     as !! x
 
 value t
-    | t == tInteger = choose [return $ ELit $ LitInt 1 tInteger]
-    | t == tChar = choose [return $ ELit $ LitInt (fromIntegral (fromEnum 'x')) tChar]
-    | t == eStar = choose $ map return [tChar, tInteger]
+    | t == tInteger = choose [pure $ ELit $ LitInt 1 tInteger]
+    | t == tChar = choose [pure $ ELit $ LitInt (fromIntegral (fromEnum 'x')) tChar]
+    | t == eStar = choose $ map pure [tChar, tInteger]
     | otherwise = fail "not support value"
 
 var t = do
     x <- randomRIO (1,100)
-    return $ TVr (anonymous x) t mempty
+    pure $ TVr (anonymous x) t mempty
 
 complicate :: Set.Set TVr -> E -> IO E
 complicate fvs e = do
-    let re = if Set.null fvs then (replicate 1 (return e) ++ ) else id
+    let re = if Set.null fvs then (replicate 1 (pure e) ++ ) else id
     e <- choose  $ re  (replicate 2 $ complicate' fvs e >>= complicate fvs )
-    return e
+    pure e
 
 complicate' fvs e
-    | EPi (TVr _ a1 _) a2 <- te = choose [ do v <- value a1; return (EAp e v), f e  ]
+    | EPi (TVr _ a1 _) a2 <- te = choose [ do v <- value a1; pure (EAp e v), f e  ]
     | otherwise = f e
     where
     te = getType e
     f (EAp a b) = choose [do
         a' <- complicate fvs a
         b' <- complicate fvs b
-        return (EAp a b), g e]
+        pure (EAp a b), g e]
     f (ELam v e) = choose [do
             e' <- complicate fvs e
-            return (ELam v e'),
+            pure (ELam v e'),
             g e]
     f e = g e
     g e = do
         t <- value eStar
         v <- var t
-        return (ELam v e)
+        pure (ELam v e)
 
 genE = do
     v <- value tInteger
@@ -101,7 +101,7 @@ countHeadVarArgTerms (b,bs) env s
         numTerms = sum [ product [ countTerm b env s | s <- ss | b <- bs ] | ss <- ndk (s - 1 - m) m]
 
 validHeadVarTypeSet  a env = concat (map (f []) (Map.keys env)) where
-    f rs b | b == a = return (a,reverse rs)
+    f rs b | b == a = pure (a,reverse rs)
     f rs (EPi (TVr _ b1 _) b2) = f (b1:rs) b2
     f _ _ = fail "not valid head var type set"
 
@@ -133,10 +133,10 @@ testE = do
 
 gen a s = genTerm a mempty s
 
-genTerm _a _env s | s < 1 = return Nothing
+genTerm _a _env s | s < 1 = pure Nothing
 genTerm a env 1
     | typeCnt env a > 0 = genVarTerm env a
-    | otherwise = return Nothing
+    | otherwise = pure Nothing
 genTerm (EPi (TVr _ a1) a2) env s = do
     let totalNumTerm = countTerm a env s
         numLamTerm = countTerm a2 (typeCntInc env a1 (s - 1))
@@ -146,6 +146,6 @@ genTerm (EPi (TVr _ a1) a2) env s = do
       else genAppTerm a env s (totalNumTerm  - numLamTerm)
 genTerm a env s = genAppTerm a env s (countTerm a env s)
 
-genVarTerm a env | typeCnt env a == 0 = return Nothing
+genVarTerm a env | typeCnt env a == 0 = pure Nothing
 
 -}

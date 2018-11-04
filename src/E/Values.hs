@@ -154,7 +154,7 @@ prim_seq a b = caseUpdate emptyCase { eCaseScrutinee = a, eCaseBind =  (tVr empt
 
 prim_unsafeCoerce e t = p e' where
     (_,e',p) = unsafeCoerceOpt $ EPrim p_unsafeCoerce [e] t
-from_unsafeCoerce (EPrim pp [e] t) | pp == p_unsafeCoerce = return (e,t)
+from_unsafeCoerce (EPrim pp [e] t) | pp == p_unsafeCoerce = pure (e,t)
 from_unsafeCoerce _ = fail "Not unsafeCoerce primitive"
 
 isState_ e = case e of
@@ -169,7 +169,7 @@ unsafeCoerceOpt (EPrim uc [e] t) | uc == p_unsafeCoerce = f (0::Int) e t where
     f n (ELit (LitInt x _)) t = (n,ELit (LitInt x t),id)
     f n (ELit lc@LitCons {}) t = (n,ELit lc { litType = t },id)
     f n ec@ECase {} t = (n,caseUpdate nx { eCaseType = t },id) where
-        Identity nx = caseBodiesMapM (return . flip prim_unsafeCoerce t) ec
+        Identity nx = caseBodiesMapM (pure . flip prim_unsafeCoerce t) ec
     f n e t | getType e == t = (n,e,id)
     f n e t = (n,e,\z -> EPrim p_unsafeCoerce [z] t)
 unsafeCoerceOpt e = (0,e,id)
@@ -258,18 +258,18 @@ safeToDup e = whnfOrBot e || isELam e || isEPi e
 eToPat e = f e where
     f (ELit LitCons { litAliasFor = af,  litName = x, litArgs = ts, litType = t }) = do
         ts <- mapM cv ts
-        return litCons { litAliasFor = af, litName = x, litArgs = ts, litType = t }
-    f (ELit (LitInt e t)) = return (LitInt e t)
+        pure litCons { litAliasFor = af, litName = x, litArgs = ts, litType = t }
+    f (ELit (LitInt e t)) = pure (LitInt e t)
     f (EPi (TVr { tvrType =  a}) b)  = do
         a <- cv a
         b <- cv b
-        return litCons { litName = tc_Arrow, litArgs = [a,b], litType = eStar }
+        pure litCons { litName = tc_Arrow, litArgs = [a,b], litType = eStar }
     f x = fail $ "E.Values.eToPat: " ++ show x
-    cv (EVar v) = return v
+    cv (EVar v) = pure v
     cv e = fail $ "E.Value.eToPat.cv: " ++ show e
 
 patToE p = f p where
-    f LitCons { litName = arr, litArgs = [a,b], litType = t} | t == eStar = return $ EPi tvr { tvrType = EVar a } (EVar b)
+    f LitCons { litName = arr, litArgs = [a,b], litType = t} | t == eStar = pure $ EPi tvr { tvrType = EVar a } (EVar b)
     f (LitCons { litAliasFor = af,  litName = x, litArgs = ts, litType = t }) = do
-       return $  ELit litCons { litAliasFor = af, litName = x, litArgs = map EVar ts, litType = t }
-    f (LitInt e t) = return $ ELit (LitInt e t)
+       pure $  ELit litCons { litAliasFor = af, litName = x, litArgs = map EVar ts, litType = t }
+    f (LitInt e t) = pure $ ELit (LitInt e t)

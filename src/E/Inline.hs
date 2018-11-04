@@ -52,7 +52,7 @@ forceSuperInline x
 forceNoinline :: HasProperties a => a -> Bool
 forceNoinline x  = fromList [prop_HASRULE,prop_NOINLINE,prop_PLACEHOLDER] `intersects` getProperties x
 
-app (e,[]) = return e
+app (e,[]) = pure e
 app (e,xs) = app' e xs
 
 app' (ELit lc@LitCons { litName = n, litArgs = xs, litType = EPi ta tt }) (a:as)  = do
@@ -73,16 +73,16 @@ app' ec@ECase {} xs = do
     let f e = app' e xs
     ec' <- caseBodiesMapM f ec
     let t = foldl eAp (eCaseType ec') xs
-    return $ caseUpdate ec' { eCaseType = t }
+    pure $ caseUpdate ec' { eCaseType = t }
 app' (ELetRec ds e) xs = do
     mtick (toAtom "E.Simplify.let-application")
     e' <- app' e xs
-    return $ eLetRec ds e'
+    pure $ eLetRec ds e'
 app' (EError s t) xs = do
     mtick (toAtom "E.Simplify.error-application")
-    return $ EError s (foldl eAp t xs)
+    pure $ EError s (foldl eAp t xs)
 app' e as = do
-    return $ foldl EAp e as
+    pure $ foldl EAp e as
 
 -- | Map recursive groups, allowing an initial map to be passed in and it will
 -- also propagate changes in the tvrInfo properly, and make sure nothing
@@ -108,10 +108,10 @@ programMapRecGroups imap idann letann lamann f prog = do
             let smap = substMap' $ fromList [ (combIdent  x,EVar (combHead  x)) | x <- nds]
                 nds' = [ combBody_u smap x | x <- nds]
             g (nds':rs) imap' rds
-        g rs _ [] = return $ concat rs
+        g rs _ [] = pure $ concat rs
         bm xs imap = fromList [ (combIdent c,Just $ EVar (combHead c)) | c <- xs ] `union` imap
     ds <- g [] imap $ programDecomposedCombs prog
-    return $ programUpdate $ prog { progCombinators = ds }
+    pure $ programUpdate $ prog { progCombinators = ds }
 
 programDecomposedCombs :: Program -> [(Bool,[Comb])]
 programDecomposedCombs prog = map f $ scc g where
@@ -144,9 +144,9 @@ programMapProgGroups imap f prog = do
                 nds = progCombinators nprog
                 nds' = [ combBody_u smap x | x <- nds]
             g (unames nds' nprog) (nds':rs) imap' rds
-        g prog' rs _ [] = return $ (concat rs,prog')
+        g prog' rs _ [] = pure $ (concat rs,prog')
         bm xs imap = fromList [ (combIdent c,Just $ EVar (combHead c)) | c <- xs ] `union` imap
-        nann _ = return
+        nann _ = pure
         unames ds prog = prog { progExternalNames = progExternalNames prog `mappend` fromList (map combIdent ds) }
     (ds,prog'') <- g prog { progStats = mempty } [] imap $ programDecomposedCombs prog
-    return $ programUpdate $ prog { progCombinators = ds, progStats = progStats prog `mappend` progStats prog'' }
+    pure $ programUpdate $ prog { progCombinators = ds, progStats = progStats prog `mappend` progStats prog'' }

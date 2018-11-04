@@ -72,17 +72,17 @@ instance Binary Rules where
     put (Rules mp) = put (concat $ values mp)
     get = do
         rs <- get
-        return $ fromRules rs
+        pure $ fromRules rs
 
 mapBodies :: Monad m => (E -> m E) -> Rules -> m Rules
 mapBodies g (Rules mp) = do
     let f rule = do
             b <- g (ruleBody rule)
-            return rule { ruleBody = b }
+            pure rule { ruleBody = b }
     mp' <- T.mapM (mapM f) mp
-    return $ Rules mp'
-    --mp' <- sequence [ do rs' <- mapM f rs; return (k,rs') | (k,rs) <- Map.toAscList mp ]
-    --return $ Rules $ Map.fromAscList mp'
+    pure $ Rules mp'
+    --mp' <- sequence [ do rs' <- mapM f rs; pure (k,rs') | (k,rs) <- Map.toAscList mp ]
+    --pure $ Rules $ Map.fromAscList mp'
 
 instance FreeVars Rule [Id] where
     freeVars rule = idSetToList $ freeVars rule
@@ -118,7 +118,7 @@ mapRBodyArgs g r = do
     let f rule = do
             b <- g (ruleBody rule)
             as <- mapM g (ruleArgs rule)
-            return rule { ruleArgs = as, ruleBody = b }
+            pure rule { ruleArgs = as, ruleBody = b }
     f r
 
 rulesFromARules :: ARules -> [Rule]
@@ -130,12 +130,12 @@ dropArguments os  rs  = catMaybes $  map f rs where
     f r = do
         let g (i,a) | Just v <- lookup i os = do
                 rs <- match (const Nothing) (ruleBinds r) a v
-                return (Right rs)
-            g (i,a) = return (Left a)
+                pure (Right rs)
+            g (i,a) = pure (Left a)
         as' <- mapM g $ zip naturals (ruleArgs r)
         let sb = substLet (concat $ rights as')
             sa = substMap $ fromList [ (tvrIdent t,v) |  Right ds <- as', (t,v) <- ds ]
-        return r { ruleArgs = map sa (lefts as'), ruleBody = sb (ruleBody r) }
+        pure r { ruleArgs = map sa (lefts as'), ruleBody = sb (ruleBody r) }
 
 -- | ARules contains a set of rules for a single id, optimized for fast application
 --
@@ -183,13 +183,13 @@ rsubstMap im e = doSubst False True (fmap ( (`mlookup` im) . tvrIdent) (unions $
 applyRules :: MonadStats m => (Id -> Maybe E) -> ARules -> [E] -> m (Maybe (E,[E]))
 applyRules lup (ARules _ rs) xs = f rs where
     lxs = length xs
-    f [] = return Nothing
-    f (r:_) | ruleNArgs r > lxs = return Nothing
+    f [] = pure Nothing
+    f (r:_) | ruleNArgs r > lxs = pure Nothing
     f (r:rs) = case sequence (zipWith (match lup (ruleBinds r)) (ruleArgs r) xs) of
         Just ss -> do
             mtick (ruleName r)
             let b = rsubstMap (fromList [ (i,x) | (TVr { tvrIdent = i },x) <- concat ss ]) (ruleBody r)
-            return $ Just (b,drop (ruleNArgs r) xs)
+            pure $ Just (b,drop (ruleNArgs r) xs)
         Nothing -> do f rs
 
 preludeError = toId v_error
@@ -198,8 +198,8 @@ ruleError = toAtom "Rule.error/EError"
 builtinRule TVr { tvrIdent = n } (ty:s:rs)
     | n == preludeError, Just s' <- toString s  = do
         mtick ruleError
-        return $ Just ((EError ("Prelude.error: " ++ s') ty),rs)
-builtinRule _ _ = return Nothing
+        pure $ Just ((EError ("Prelude.error: " ++ s') ty),rs)
+builtinRule _ _ = pure Nothing
 
 makeRule ::
     String      -- ^ the rule name
@@ -244,7 +244,7 @@ match lup vs = \e1 e2 -> liftM Seq.toList $ execWriterT (un e1 e2 () etherealIds
     un (EPrim s xs t) (EPrim s' ys t') mm c | length xs == length ys = do
         sequence_ [ un x y mm c | x <- xs | y <- ys]
         un t t' mm c
-    un (ESort x) (ESort y) mm c | x == y = return ()
+    un (ESort x) (ESort y) mm c | x == y = pure ()
     un (ELit (LitInt x t1))  (ELit (LitInt y t2)) mm c | x == y = un t1 t2 mm c
     un (ELit LitCons { litName = n, litArgs = xs, litType = t })  (ELit LitCons { litName = n', litArgs = ys, litType =  t'}) mm c | n == n' && length xs == length ys = do
         sequence_ [ un x y mm c | x <- xs | y <- ys]

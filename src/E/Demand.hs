@@ -200,9 +200,9 @@ instance DataTableMonad IM where
     getDataTable = asks snd
 
 runIM :: Monad m => IM a -> DataTable ->  m a
-runIM (IM im) dt = return $ runReader im (mempty,dt)
+runIM (IM im) dt = pure $ runReader im (mempty,dt)
 
--- returns the demand type and whether it was found in the local environment or guessed
+-- pures the demand type and whether it was found in the local environment or guessed
 determineDemandType :: TVr -> Demand -> IM (Either DemandType E)
 determineDemandType tvr demand = do
     let g (DemandSignature n dt@(DemandEnv phi _ :=> _)) = f n demand where
@@ -211,11 +211,11 @@ determineDemandType tvr demand = do
             f _ _ = lazify (DemandEnv phi Absent) :=> []
     env <- getEnv
     case mlookup (tvrIdent tvr) env of
-        Just (Left ds) -> return (Left $ g ds)
-        Just (Right e) -> return (Right e)
+        Just (Left ds) -> pure (Left $ g ds)
+        Just (Right e) -> pure (Right e)
         Nothing -> case Info.lookup (tvrInfo tvr) of
-            Nothing -> return (Left absType)
-            Just ds -> return (Left $ g ds)
+            Nothing -> pure (Left absType)
+            Just ds -> pure (Left $ g ds)
 
 extendSig (DemandSignature n1 t1) (DemandSignature n2 t2)  = DemandSignature (max n1 n2) (glb t1 t2)
 
@@ -223,63 +223,63 @@ splitSigma [] = (lazy,[])
 splitSigma (x:xs) = (x,xs)
 
 analyze :: E -> Demand -> IM (E,DemandType)
-analyze e Absent = return (e,absType)
+analyze e Absent = pure (e,absType)
 analyze (EVar v) s = do
     ddt <- determineDemandType v s
     (phi :=> sigma) <- case ddt of
-        Left dt -> return dt
+        Left dt -> pure dt
         Right e -> liftM snd $ analyze e s
-    return (EVar v,(phi `glb` (demandEnvSingleton v s)) :=> sigma)
+    pure (EVar v,(phi `glb` (demandEnvSingleton v s)) :=> sigma)
 analyze (EAp e1 e2) s = do
     (e1',phi1 :=> sigma1') <- analyze e1 (sp [s])
     let (sa,sigma1) = splitSigma sigma1'
     (e2',phi2 :=> sigma2) <- analyze e2 sa
-    return $ (EAp e1' e2',(phi1 `glb` phi2) :=> sigma1)
+    pure $ (EAp e1' e2',(phi1 `glb` phi2) :=> sigma1)
 analyze el@(ELit lc@LitCons { litName = h, litArgs = ts@(_:_) }) (S (Product ss)) | length ss == length ts = do
     dataTable <- getDataTable
     case onlyChild dataTable h of
         True -> do  -- product type
             envs <- flip mapM (zip ts ss) $ \(a,s) -> do
                 (_,env :=> _) <- analyze a s
-                return env
-            return (el,foldr1 glb envs :=> [])
+                pure env
+            pure (el,foldr1 glb envs :=> [])
         _ -> do
             rts <- mapM (\e -> analyze e lazy) ts
-            return (ELit lc { litArgs = fsts rts }, foldr glb absType (snds rts))
+            pure (ELit lc { litArgs = fsts rts }, foldr glb absType (snds rts))
 
 analyze (ELit lc@LitCons { litArgs = ts }) _s = do
     rts <- mapM (\e -> analyze e lazy) ts
-    return (ELit lc { litArgs = fsts rts }, foldr glb absType (snds rts))
+    pure (ELit lc { litArgs = fsts rts }, foldr glb absType (snds rts))
 analyze e s | Just (t1,t2,pt) <- from_dependingOn e = do
     (t1',dt1) <- analyze t1 s
     (t2',dt2) <- analyze t2 lazy
-    return (EPrim p_dependingOn [t1',t2'] pt,dt1 `glb` dt2)
+    pure (EPrim p_dependingOn [t1',t2'] pt,dt1 `glb` dt2)
 analyze (EPrim ap ts pt) _s = do
     rts <- mapM (\e -> analyze e lazy) ts
-    return (EPrim ap (fsts rts) pt, foldr glb absType (snds rts))
+    pure (EPrim ap (fsts rts) pt, foldr glb absType (snds rts))
 analyze (EPi tvr@TVr { tvrType = t1 } t2)  _s = do
     (t1',dt1) <- analyze t1 lazy
     (t2',dt2) <- analyze t2 lazy
-    return (EPi tvr { tvrType = t1' } t2',dt1 `glb` dt2)
+    pure (EPi tvr { tvrType = t1' } t2',dt1 `glb` dt2)
 
 analyze (ELam x@TVr { tvrIdent = eid } e) (S (Product [s])) | eid == emptyId = do
     (e',phi :=> sigma) <- analyze e s
     let sx = Absent
-    return (ELam (tvrInfo_u (Info.insert $! sx) x) e',demandEnvMinus phi x :=> (sx:sigma))
+    pure (ELam (tvrInfo_u (Info.insert $! sx) x) e',demandEnvMinus phi x :=> (sx:sigma))
 analyze (ELam x e) (S (Product [s])) = do
     (e',phi :=> sigma) <- analyze e s
     let sx = lenv (tvrIdent x) phi
-    return (ELam (tvrInfo_u (Info.insert $! sx) x) e',demandEnvMinus phi x :=> (sx:sigma))
+    pure (ELam (tvrInfo_u (Info.insert $! sx) x) e',demandEnvMinus phi x :=> (sx:sigma))
 
 analyze (ELam x e) (L (Product [s])) = do
     (e',phi :=> sigma) <- analyze e s
     let sx = lenv (tvrIdent x) phi
-    return (ELam (tvrInfo_u (Info.insert $! sx) x) e',lazify (demandEnvMinus phi x) :=> (sx:sigma))
+    pure (ELam (tvrInfo_u (Info.insert $! sx) x) e',lazify (demandEnvMinus phi x) :=> (sx:sigma))
 analyze (ELam x e) (S None) = analyze (ELam x e) (S (Product [lazy]))  -- simply to ensure binder is annotated
 analyze (ELam x e) (L None) = analyze (ELam x e) (L (Product [lazy]))  -- simply to ensure binder is annotated
 analyze (ELam x e) (Error None) = analyze (ELam x e) (Error (Product [lazy]))  -- simply to ensure binder is annotated
-analyze e@EError {} (S _) = return (e,botType)
-analyze e@EError {} (L _) = return (e,absType)
+analyze e@EError {} (S _) = pure (e,botType)
+analyze e@EError {} (L _) = pure (e,absType)
 analyze ec@ECase { eCaseBind = b, eCaseAlts = [Alt lc@LitCons { litName = h, litArgs = ts } alt], eCaseDefault = Nothing } s = do
     dataTable <- getDataTable
     case onlyChild dataTable h of
@@ -287,24 +287,24 @@ analyze ec@ECase { eCaseBind = b, eCaseAlts = [Alt lc@LitCons { litName = h, lit
             (alt',enva :=> siga) <- extEnvE b (eCaseScrutinee ec) $ analyze alt s
             (e',enve :=> []) <- analyze (eCaseScrutinee ec) (sp [ lenv (tvrIdent t) enva | t <- ts])
             let nenv = enve `glb` foldr denvDelete enva (b:ts)
-            return (caseUpdate $ ec { eCaseScrutinee = e', eCaseAlts = [Alt lc alt'] }, nenv :=> siga)
+            pure (caseUpdate $ ec { eCaseScrutinee = e', eCaseAlts = [Alt lc alt'] }, nenv :=> siga)
         _ -> analyzeCase ec s
 analyze ec@ECase {} s = analyzeCase ec s
 analyze ELetRec { eDefs = ds, eBody = b } s = f (decomposeDs ds) [] where
     f [] ds' = do
         (b',phi :=> sig) <- analyze b s
         let g (t,e) = (tvrInfo_u (Info.insert $! (lenv (tvrIdent t) phi)) t,e)
-        return (ELetRec (map g ds') b', foldr denvDelete phi (fsts ds) :=> sig)
+        pure (ELetRec (map g ds') b', foldr denvDelete phi (fsts ds) :=> sig)
     f (Left (t,e):rs) fs =
         solveDs' (Just False) [(t,e)] fixupDemandSignature (\nn -> f rs (nn ++ fs))
     f (Right rg:rs) fs = do
         solveDs' (Just True) rg fixupDemandSignature (\nn -> f rs (nn ++ fs))
-analyze Unknown _ = return (Unknown,absType)
-analyze es@ESort {} _ = return (es,absType)
-analyze es@(ELit LitInt {}) _ = return (es,absType)
+analyze Unknown _ = pure (Unknown,absType)
+analyze es@ESort {} _ = pure (es,absType)
+analyze es@(ELit LitInt {}) _ = pure (es,absType)
 analyze e x = fail $ "analyze: " ++ show (e,x)
 
-from_dependingOn (EPrim don [t1,t2] pt) | don == p_dependingOn = return (t1,t2,pt)
+from_dependingOn (EPrim don [t1,t2] pt) | don == p_dependingOn = pure (t1,t2,pt)
 from_dependingOn _ = fail "not dependingOn"
 
 lazify (DemandEnv x r) = DemandEnv (fmap f x) Absent where
@@ -318,21 +318,21 @@ analyzeCase ec s = do
     (ec',dts) <- extEnvE (eCaseBind ec) (eCaseScrutinee ec) $ runWriterT $ flip caseBodiesMapM ec $ \e -> do
         (ne,dt) <- lift $ analyze e s
         tell [dt]
-        return ne
+        pure ne
     (ecs,env :=> _) <- analyze (eCaseScrutinee ec') strict
     let enva :=> siga =  foldr1 lub dts
     let nenv = foldr denvDelete (glb enva env) (caseBinds ec')
-    return (caseUpdate $ ec' {eCaseScrutinee = ecs},nenv :=> siga)
+    pure (caseUpdate $ ec' {eCaseScrutinee = ecs},nenv :=> siga)
 
 denvDelete x (DemandEnv m r) = DemandEnv (delete (tvrIdent x) m) r
 
 topAnalyze :: TVr -> E -> IM (E,DemandSignature)
-topAnalyze tvr e | getProperty prop_PLACEHOLDER tvr = return (e,DemandSignature 0 absType)
+topAnalyze tvr e | getProperty prop_PLACEHOLDER tvr = pure (e,DemandSignature 0 absType)
 topAnalyze _tvr e = clam e strict 0 where
     clam (ELam _ x) s n = clam x (sp [s]) (n + 1)
     clam _ s n = do
         (e,dt) <- analyze e s
-        return (e,DemandSignature n dt)
+        pure (e,DemandSignature n dt)
 
 fixupDemandSignature (DemandSignature n (DemandEnv _ r :=> dt)) = DemandSignature n (DemandEnv mempty r :=> dt)
 
@@ -373,10 +373,10 @@ solveDs' (Just True) ds fixup wdone = trace "solveDs': jt" $ do
 {-# NOINLINE analyzeProgram #-}
 analyzeProgram prog = do
     let ds = programDs prog
-    nds <- runIM (solveDs' Nothing ds fixupDemandSignature return) (progDataTable prog)
+    nds <- runIM (solveDs' Nothing ds fixupDemandSignature pure) (progDataTable prog)
     --flip mapM_ nds $ \ (t,_) ->
     --    putStrLn $ "strictness: " ++ pprint t ++ ": " ++ show (maybe absSig id $ Info.lookup (tvrInfo t))
-    return $ programSetDs' nds prog
+    pure $ programSetDs' nds prog
 
 ----------------------------
 -- show and pprint instances

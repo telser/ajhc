@@ -37,8 +37,8 @@ import qualified System.IO
 
 transformProgram :: MonadIO m => TransformParms Program -> Program -> m Program
 
-transformProgram TransformParms { transformIterate = IterateMax n } prog | n <= 0 = return prog
-transformProgram TransformParms { transformIterate = IterateExactly n } prog | n <= 0 = return prog
+transformProgram TransformParms { transformIterate = IterateMax n } prog | n <= 0 = pure prog
+transformProgram TransformParms { transformIterate = IterateExactly n } prog | n <= 0 = pure prog
 transformProgram tp prog = liftIO $ do
     let dodump = transformDumpProgress tp
         name = transformCategory tp ++ pname (transformPass tp) ++ pname (transformName tp)
@@ -56,7 +56,7 @@ transformProgram tp prog = liftIO $ do
         dumpCoreExtra ("lint-before-" ++ name) prog (show (e::SomeException'))
         putErrLn (show (e::SomeException'))
         maybeDie
-        return prog
+        pure prog
     prog' <- Control.Exception.catch (transformOperation tp prog { progStats = mempty }) ferr
     let estat = progStats prog'
         onerr = do
@@ -69,7 +69,7 @@ transformProgram tp prog = liftIO $ do
             dumpCoreExtra ("lint-after-" ++ name) prog' rtvrs
     if transformSkipNoStats tp && estat == mempty then do
         when dodump $ putErrLn "program not changed"
-        return prog
+        pure prog
      else do
     when (dodump && dump FD.CoreSteps && (not $ Stats.null estat)) $ Stats.printLStat (optStatLevel options) name estat
     when verbose $ do
@@ -78,14 +78,14 @@ transformProgram tp prog = liftIO $ do
     wdump FD.ESize $ printESize ("After  "++name) prog'
     lintCheckProgram onerr prog'
     if doIterate iterate (not $ Stats.null estat) then transformProgram tp { transformIterate = iterateStep iterate } prog' { progStats = istat `mappend` estat } else
-        return prog' { progStats = istat `mappend` estat, progPasses = name:progPasses prog' }
+        pure prog' { progStats = istat `mappend` estat, progPasses = name:progPasses prog' }
 
 maybeDie = case optKeepGoing options of
-    True -> return ()
+    True -> pure ()
     False -> putErrDie "Internal Error"
 
 onerrNone :: IO ()
-onerrNone = return ()
+onerrNone = pure ()
 
 lintCheckE onerr dataTable tvr e | flint = case runContextEither $ inferType dataTable [] e of
     Left ss -> do
@@ -94,8 +94,8 @@ lintCheckE onerr dataTable tvr e | flint = case runContextEither $ inferType dat
         putErrLn  ( render $ hang 4 (pprint tvr <+> equals <+> pprint e))
         putErrLn $ "\n>>> internal error:\n" ++ unlines (intersperse "----" $ tail ss)
         maybeDie
-    Right v -> return ()
-lintCheckE _ _ _ _ = return ()
+    Right v -> pure ()
+lintCheckE _ _ _ _ = pure ()
 
 lintCheckProgram onerr prog | flint = do
     when (hasRepeatUnder fst (programDs prog)) $ do
@@ -119,7 +119,7 @@ lintCheckProgram onerr prog | flint = do
                     printProgram prog
                     putErrLn $ ">>> scopecheck failed in " ++ pprint tvr ++ " " ++ s
                     maybeDie
-                Right () -> return ()
+                Right () -> pure ()
             lintCheckE onerr (progDataTable prog) tvr e
     mapM_ f (programDs prog)
     let ids = progExternalNames prog `mappend` fromList (map tvrIdent $ fsts (programDs prog)) `mappend` progSeasoning prog
@@ -131,7 +131,7 @@ lintCheckProgram onerr prog | flint = do
         printProgram prog
         putErrLn (">>> Unaccounted for free variables: " ++ render (pprint $ Set.toList $ unaccounted))
         maybeDie
-lintCheckProgram _ _ = return ()
+lintCheckProgram _ _ = pure ()
 
 programFreeVars prog = freeVars (ELetRec (programDs prog) Unknown)
 

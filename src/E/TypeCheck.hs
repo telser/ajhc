@@ -182,7 +182,7 @@ canBeBox _ = False
 tBox = mktBox eStar
 
 monadicLookup key m = case Map.lookup key m of
-    Just x  -> return x
+    Just x  -> pure x
     Nothing -> fail "Key not found"
 
 -- Fast (and lazy, and perhaps unsafe) typeof
@@ -194,8 +194,8 @@ instance CanType E where
     getType e@(EPi TVr { tvrType = a } b)
         | isUnknown typa || isUnknown typb = Unknown
         | otherwise = maybe (error $ "E.TypeCheck.getType: " ++ show (e,getType a,getType b)) ESort $ do
-            ESort s1 <- return $ getType a
-            ESort s2 <- return $ getType b
+            ESort s1 <- pure $ getType a
+            ESort s2 <- pure $ getType b
             monadicLookup (s1,s2) ptsRulesMap
         where typa = getType a; typb = getType b
     getType (EAp (ELit LitCons { litType = EPi tvr a }) b) = getType (subst tvr b a)
@@ -252,7 +252,7 @@ inferType dataTable ds e = rfc e where
     rfc e =  withContextDoc (text "fullCheck:" </> prettyE e) (fc e >>= strong')
     rfc' nds e = withContextDoc (text "fullCheck':" </> prettyE e) (inferType' nds e)
     strong' e = withContextDoc (parens $ text "Strong:" </> prettyE e) $ strong ds e
-    fc s@(ESort _) = return $ getType s
+    fc s@(ESort _) = pure $ getType s
     fc (ELit lc@LitCons {}) | let lc' = updateLit dataTable lc, litAliasFor lc /= litAliasFor lc' = fail $ "Alias not correct: " ++ show (lc, litAliasFor lc')
     fc (ELit LitCons { litName = n, litArgs = es, litType =  t}) | nameType n == TypeConstructor, Just _ <- fromUnboxedNameTuple n = do
         withContext ("Checking Unboxed Tuple: " ++ show n) $ do
@@ -272,8 +272,8 @@ inferType dataTable ds e = rfc e where
         unless (les == lsts || (les < lsts && isEPi t')) $ do
             fail "constructor with wrong number of arguments"
         zipWithM_ eq sts es'
-        return t'
-    fc e@(ELit _) = let t = getType e in valid t >> return t
+        pure t'
+    fc e@(ELit _) = let t = getType e in valid t >> pure t
     fc (EVar (TVr { tvrIdent = eid })) | eid == emptyId = fail "variable with nothing!"
     fc (EVar (TVr { tvrType =  t})) = valid t >> strong' t
     fc (EPi (TVr { tvrIdent = n, tvrType =  at}) b) = do
@@ -292,7 +292,7 @@ inferType dataTable ds e = rfc e where
     fc (EAp a b) = do
         withContextDoc (text "EAp:" </> parens (prettyE a) </> parens (prettyE b)) $ do
             a' <- rfc a
-            if a' == tBox then return tBox else strong' (eAp a' b)
+            if a' == tBox then pure tBox else strong' (eAp a' b)
     fc (ELetRec vs e) = do
         let ck (TVr { tvrIdent = eid },_) | eid == emptyId = fail "binding of empty var"
             ck (tv@(TVr { tvrType =  t}),e) = withContextDoc (hsep [text "Checking Let: ", parens (pprint tv),text  " = ", parens $ prettyE e ])  $ do
@@ -338,8 +338,8 @@ inferType dataTable ds e = rfc e where
         verifyPats (casePats ec)
         ps <- mapM (strong' . getType) $ casePats ec
         withContext "checking pattern equality" $ eqAll (et:ps)
-        return ect
-    fc Unknown = return Unknown
+        pure ect
+    fc Unknown = pure Unknown
     --fc e = failDoc $ text "what's this? " </> (prettyE e)
     calt (EVar v) (Alt l e) = do
         let nv =  followAliases undefined (patToLitEE l)
@@ -350,26 +350,26 @@ inferType dataTable ds e = rfc e where
         when (hasRepeatUnder litHead xs) $ fail "Duplicate case alternatives"
 
     verifyPats' LitCons { litArgs = xs } = when (hasRepeatUnder id (filter (/= emptyId) $ map tvrIdent xs)) $ fail "Case pattern is non-linear"
-    verifyPats' _ = return ()
+    verifyPats' _ = pure ()
 
     eqAll ts = withContextDoc (text "eqAll" </> list (map prettyE ts)) $ foldl1M_ eq ts
     valid s = valid' ds s
-    valid' nds ESort {} = return ()
+    valid' nds ESort {} = pure ()
     valid' nds s
-        | Unknown <- s = return ()
+        | Unknown <- s = pure ()
         | otherwise =  withContextDoc (text "valid:" <+> prettyE s) (do t <- inferType' nds s;  valid' nds t)
-    eq box t2 | boxCompat box t2 = return t2
-    eq t1 box | boxCompat box t1 = return t1
-   -- box == tBox, canBeBox t2 = return t2
-   -- eq t1 box | box == tBox, canBeBox t1 = return t1
-    eq Unknown t2 = return t2
-    eq t1 Unknown = return t1
+    eq box t2 | boxCompat box t2 = pure t2
+    eq t1 box | boxCompat box t1 = pure t1
+   -- box == tBox, canBeBox t2 = pure t2
+   -- eq t1 box | box == tBox, canBeBox t1 = pure t1
+    eq Unknown t2 = pure t2
+    eq t1 Unknown = pure t1
     eq t1 t2 = eq' ds t1 t2
     eq' nds t1 t2 = do
         e1 <- strong nds (t1)
         e2 <- strong nds (t2)
         case typesCompatable e1 e2 of
-            Just () -> return (e1)
+            Just () -> pure (e1)
             Nothing -> failDoc $ text "eq:" <+> align $ vcat [ prettyE (e1), prettyE (e2) ]
     fceq nds e1 t2 = do
         withContextDoc (hsep [text "fceq:", align $ vcat [parens $ prettyE e1,  parens $ prettyE t2]]) $ do
@@ -390,16 +390,16 @@ infertype env a = case typecheck env a of
 instance CanTypeCheck E where
     typecheck dataTable e = case runContextEither $ typeInfer'' dataTable [] e of
         Left ss -> fail $ "\n>>> internal error:\n" ++ unlines ss
-        Right v -> return v
+        Right v -> pure v
 
 instance CanTypeCheck TVr where
     typecheck dt tvr = do
         typecheck dt (getType tvr)
-        return $ getType tvr
+        pure $ getType tvr
 
 instance CanTypeCheck (Lit a E) where
-    typecheck  dt LitCons { litType = t } = typecheck dt t >> return t
-    typecheck  dt LitInt  { litType = t } = typecheck dt t >> return t
+    typecheck  dt LitCons { litType = t } = typecheck dt t >> pure t
+    typecheck  dt LitInt  { litType = t } = typecheck dt t >> pure t
 
 -- TODO, types might be bound in scrutinization
 instance CanTypeCheck (Alt E) where
@@ -442,7 +442,7 @@ tcE e = rfc e where
         ds <- asks tcDefns
         withContextDoc (text "tcE.strong:" </> ePretty e) $ strong ds e
 
-    fc s@ESort {} = return $ getType s
+    fc s@ESort {} = pure $ getType s
     fc (ELit LitCons { litType = t }) = strong' t
     fc e@ELit {} = strong' (getType e)
     fc (EVar TVr { tvrIdent = eid }) | eid == emptyId = fail "variable with nothing!"
@@ -454,20 +454,20 @@ tcE e = rfc e where
     fc (ELam tvr@TVr { tvrIdent = n, tvrType =  at} b) = do
         at' <- strong' at
         b' <- local (tcDefns_u (\ds -> [ d | d@(v,_) <- ds, tvrIdent v /= n ])) $ rfc b
-        return (EPi (tVr n at') b')
+        pure (EPi (tVr n at') b')
     fc (EAp (EPi tvr e) b) = do
         b <- strong' b
         rfc (subst tvr b e)
     fc (EAp (ELit lc@LitCons { litAliasFor = Just af }) b) = fc (EAp (foldl eAp af (litArgs lc)) b)
     fc (EAp a b) = do
         a' <- rfc a
-        if a' == tBox then return tBox else strong' (eAp a' b)
+        if a' == tBox then pure tBox else strong' (eAp a' b)
     fc (ELetRec vs e) = local (tcDefns_u (vs ++)) $ rfc e
     fc (EError _ e) = strong' e
     fc (EPrim _ ts t) = strong' t
     fc ECase { eCaseType = ty } = do
         strong' ty
-    fc Unknown = return Unknown
+    fc Unknown = pure Unknown
     fc e = failDoc $ text "what's this? " </> (ePretty e)
 -}
 
@@ -477,7 +477,7 @@ typeInfer'' dataTable ds e = rfc e where
     rfc e =  withContextDoc (text "fullCheck':" </> ePretty e) (fc e >>= strong')
     rfc' nds e =  withContextDoc (text "fullCheck':" </> ePretty e) (inferType' nds e)
     strong' e = withContextDoc (text "Strong':" </> ePretty e) $ strong ds e
-    fc s@ESort {} = return $ getType s
+    fc s@ESort {} = pure $ getType s
     fc (ELit LitCons { litType = t }) = strong' t
     fc e@ELit {} = strong' (getType e)
     fc (EVar TVr { tvrIdent = eid }) | eid == emptyId = fail "variable with nothing!"
@@ -489,14 +489,14 @@ typeInfer'' dataTable ds e = rfc e where
     fc (ELam tvr@TVr { tvrIdent = n, tvrType =  at} b) = do
         at' <- strong' at
         b' <- rfc' [ d | d@(v,_) <- ds, tvrIdent v /= n ] b
-        return (EPi (tVr n at') b')
+        pure (EPi (tVr n at') b')
     fc (EAp (EPi tvr e) b) = do
         b <- strong' b
         rfc (subst tvr b e)
     fc (EAp (ELit lc@LitCons { litAliasFor = Just af }) b) = fc (EAp (foldl eAp af (litArgs lc)) b)
     fc (EAp a b) = do
         a' <- rfc a
-        if a' == tBox then return tBox else strong' (eAp a' b)
+        if a' == tBox then pure tBox else strong' (eAp a' b)
     fc (ELetRec vs e) = do
         let nds = vs ++ ds
         --et <- inferType' nds e
@@ -506,7 +506,7 @@ typeInfer'' dataTable ds e = rfc e where
     fc (EPrim _ ts t) = strong' t
     fc ECase { eCaseType = ty } = do
         strong' ty
-    fc Unknown = return Unknown
+    fc Unknown = pure Unknown
     --fc e = failDoc $ text "what's this? " </> (ePretty e)
 
 -- | find substitution that will transform the left term into the right one,
@@ -533,7 +533,7 @@ match lup vs = \e1 e2 -> liftM Seq.toList $ execWriterT (un e1 e2 etherealIds) w
     un (EPrim s xs t) (EPrim s' ys t') c | length xs == length ys = do
         sequence_ [ un x y c | x <- xs | y <- ys]
         un t t' c
-    un (ESort x) (ESort y) c | x == y = return ()
+    un (ESort x) (ESort y) c | x == y = pure ()
     un (ELit (LitInt x t1))  (ELit (LitInt y t2)) c | x == y = un t1 t2 c
     un (ELit LitCons { litName = n, litArgs = xs, litType = t })  (ELit LitCons { litName = n', litArgs = ys, litType =  t'}) c | n == n' && length xs == length ys = do
         sequence_ [ un x y c | x <- xs | y <- ys]

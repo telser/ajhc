@@ -15,7 +15,7 @@ instance Binary TVr where
         x <- get
         e <- get
         nf <- getInfo
-        return $ TVr x e nf
+        pure $ TVr x e nf
 
 instance Data.Binary.Binary RuleType where
     put RuleSpecialization = do
@@ -28,11 +28,11 @@ instance Data.Binary.Binary RuleType where
 	    h <- Data.Binary.getWord8
 	    case h of
 	      0 -> do
-		    return RuleSpecialization
+		    pure RuleSpecialization
 	      1 -> do
-		    return RuleUser
+		    pure RuleUser
 	      2 -> do
-		    return RuleCatalyst
+		    pure RuleCatalyst
 	      _ -> fail "invalid binary data found"
 
 instance Data.Binary.Binary Rule where
@@ -54,7 +54,7 @@ instance Data.Binary.Binary Rule where
     af <- get
     ag <- get
     ah <- get
-    return (Rule aa ab ac ad ae af ag ah)
+    pure (Rule aa ab ac ad ae af ag ah)
 
 instance Data.Binary.Binary ARules where
     put (ARules aa ab) = do
@@ -63,7 +63,7 @@ instance Data.Binary.Binary ARules where
     get = do
     aa <- get
     ab <- get
-    return (ARules aa ab)
+    pure (ARules aa ab)
 
 instance (Data.Binary.Binary e,
 	  Data.Binary.Binary t) => Data.Binary.Binary (Lit e t) where
@@ -83,13 +83,13 @@ instance (Data.Binary.Binary e,
 	      0 -> do
 		    aa <- Data.Binary.get
 		    ab <- Data.Binary.get
-		    return (LitInt aa ab)
+		    pure (LitInt aa ab)
 	      1 -> do
 		    ac <- Data.Binary.get
 		    ad <- Data.Binary.get
 		    ae <- Data.Binary.get
 		    af <- Data.Binary.get
-		    return (LitCons ac ad ae af)
+		    pure (LitCons ac ad ae af)
 	      _ -> fail "invalid binary data found"
 
 instance Data.Binary.Binary ESort where
@@ -112,20 +112,20 @@ instance Data.Binary.Binary ESort where
 	    h <- Data.Binary.getWord8
 	    case h of
 	      0 -> do
-		    return EStar
+		    pure EStar
 	      1 -> do
-		    return EBang
+		    pure EBang
 	      2 -> do
-		    return EHash
+		    pure EHash
 	      3 -> do
-		    return ETuple
+		    pure ETuple
 	      4 -> do
-		    return EHashHash
+		    pure EHashHash
 	      5 -> do
-		    return EStarStar
+		    pure EStarStar
 	      6 -> do
 		    aa <- Data.Binary.get
-		    return (ESortNamed aa)
+		    pure (ESortNamed aa)
 	      _ -> fail "invalid binary data found"
 
 instance Data.Binary.Binary E where
@@ -179,39 +179,39 @@ instance Data.Binary.Binary E where
 	      0 -> do
 		    aa <- Data.Binary.get
 		    ab <- Data.Binary.get
-		    return (EAp aa ab)
+		    pure (EAp aa ab)
 	      1 -> do
 		    ac <- Data.Binary.get
 		    ad <- Data.Binary.get
-		    return (ELam ac ad)
+		    pure (ELam ac ad)
 	      2 -> do
 		    ae <- Data.Binary.get
 		    af <- Data.Binary.get
-		    return (EPi ae af)
+		    pure (EPi ae af)
 	      3 -> do
 		    ag <- Data.Binary.get
-		    return (EVar ag)
+		    pure (EVar ag)
 	      4 -> do
-		    return Unknown
+		    pure Unknown
 	      5 -> do
 		    ah <- Data.Binary.get
-		    return (ESort ah)
+		    pure (ESort ah)
 	      6 -> do
 		    ai <- Data.Binary.get
-		    return (ELit ai)
+		    pure (ELit ai)
 	      7 -> do
 		    aj <- Data.Binary.get
 		    ak <- Data.Binary.get
-		    return (ELetRec aj ak)
+		    pure (ELetRec aj ak)
 	      8 -> do
 		    al <- Data.Binary.get
 		    am <- Data.Binary.get
 		    an <- Data.Binary.get
-		    return (EPrim al am an)
+		    pure (EPrim al am an)
 	      9 -> do
 		    ao <- Data.Binary.get
 		    ap <- Data.Binary.get
-		    return (EError ao ap)
+		    pure (EError ao ap)
 	      10 -> do
 		    aq <- Data.Binary.get
 		    ar <- Data.Binary.get
@@ -219,7 +219,7 @@ instance Data.Binary.Binary E where
 		    at <- Data.Binary.get
 		    au <- Data.Binary.get
 		    av <- Data.Binary.get
-		    return (ECase aq ar as at au av)
+		    pure (ECase aq ar as at au av)
 	      _ -> fail "invalid binary data found"
 
 instance (Data.Binary.Binary e) => Data.Binary.Binary (Alt e) where
@@ -229,4 +229,4 @@ instance (Data.Binary.Binary e) => Data.Binary.Binary (Alt e) where
     get = do
     aa <- get
     ab <- get
-    return (Alt aa ab)
+    pure (Alt aa ab)

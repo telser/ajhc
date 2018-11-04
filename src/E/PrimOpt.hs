@@ -86,16 +86,16 @@ performPrimOpt (ELit lc@LitCons { litArgs = xs }) = do
 performPrimOpt (EPrim ap xs t) = do
     xs' <- mapM performPrimOpt xs
     primOpt' (EPrim ap xs' t)
-performPrimOpt e = return e
+performPrimOpt e = pure e
 
 primOpt' e@(EPrim s xs t) = do
     let primopt (Op (Op.BinOp bop t1 t2) tr) [e1,e2] rt =
             binOp bop t1 t2 tr e1 e2 rt
         primopt (Op (Op.ConvOp cop t1) t2) [ELit (LitInt n t)] rt =
-            return $ ELit (LitInt (convNumber cop t1 t2 n) rt)
+            pure $ ELit (LitInt (convNumber cop t1 t2 n) rt)
         primopt (Op (Op.ConvOp cop t1) t2) [e1] rt = case convOp cop t1 t2 of
-            Nothing | getType e1 == rt -> return e1
-            Just cop' | cop' /= cop -> return $ primConv cop' t1 t2 e1 rt
+            Nothing | getType e1 == rt -> pure e1
+            Just cop' | cop' /= cop -> pure $ primConv cop' t1 t2 e1 rt
             _ -> fail "couldn't apply conversion optimization"
         primopt (Op (Op.UnOp bop t1) tr) [e1] rt = unOp bop t1 tr e1 rt
         primopt _ _ _ = fail "No Primitive optimization to apply"
@@ -103,8 +103,8 @@ primOpt' e@(EPrim s xs t) = do
         Just n -> do
             mtick (toAtom $ "E.PrimOpt." ++ braces (pprint s) ++ cextra s xs )
             primOpt' n
-        Nothing -> return e
-primOpt' e = return e
+        Nothing -> pure e
+primOpt' e = pure e
 
 cextra Op {} [] = ""
 cextra Op {} xs = '.':map f xs where
@@ -116,7 +116,7 @@ cextra _ _ = ""
 instance Expression E E where
     toBool True = ELit lTruezh
     toBool False = ELit lFalsezh
-    toConstant (ELit (LitInt n t)) = return (n,t)
+    toConstant (ELit (LitInt n t)) = pure (n,t)
     toConstant _ = Nothing
     equalsExpression e1 e2 = e1 == e2
     caseEquals scrut (n,t) e1 e2 = eCase scrut [Alt (LitInt n t) e1 ] e2

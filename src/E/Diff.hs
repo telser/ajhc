@@ -25,7 +25,7 @@ printEStats :: E -> IO ()
 printEStats e = do
     stats <- Stats.new
     let f e@ELam {} = tick stats "lambda" >> emapE' f e
-        f e@EVar {} = tick stats "var-use" >> return e
+        f e@EVar {} = tick stats "var-use" >> pure e
         f e@(ELetRec ds _) = ticks stats (length ds) "let-binding" >> emapE' f e
         f e@EPi {} = tick stats "pi" >> emapE' f e
         f e@ELit {} = tick stats "lit" >> emapE' f e
