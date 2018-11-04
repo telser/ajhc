@@ -117,10 +117,10 @@ prepareConstraints :: Ord v => C l v -> IO ([CL l (RS l v)], Map.Map v (RS l v))
 prepareConstraints (C cseq) = f Map.empty (S.toList cseq) id [] where
     f m (c:cs) ar rs = do
         let h x mp = case Map.lookup x mp of
-                Just v -> return (v,mp)
+                Just v -> pure (v,mp)
                 Nothing -> do
                     v <- UF.new (Ri Nothing mempty Nothing mempty) x
-                    return (v, Map.insert x v mp)
+                    pure (v, Map.insert x v mp)
         case c of
             CL x op l -> do
                 (x',m') <- h x m
@@ -130,7 +130,7 @@ prepareConstraints (C cseq) = f Map.empty (S.toList cseq) id [] where
                 (y',m'') <- h y m'
                 f m'' cs id (ar (CV x' op y'):rs)
             CLAnnotate s c -> f m (c:cs) (ar . CLAnnotate s) rs
-    f m [] _ rs = return (rs,m)
+    f m [] _ rs = pure (rs,m)
 
 check op x y = case op of
     OpEq -> x `eq` y
@@ -148,10 +148,10 @@ solve putLog csp = do
             xe <- UF.find x
             ye <- UF.find y
             doVar "" xe op ye
-        procVar (CLAnnotate s CL {}) =  return ()
-        procVar CL {} = return ()
+        procVar (CLAnnotate s CL {}) =  pure ()
+        procVar CL {} = pure ()
         procVar (CLAnnotate s cr) =  putLog s >>  procVar cr
-        doVar _ xe _ ye | xe == ye = return ()
+        doVar _ xe _ ye | xe == ye = pure ()
         doVar lvl xe op ye = do
             putLog $ lvl ++ "Constraining: " ++ show (fromElement xe) ++ show op ++ show (fromElement ye)
             xw <- UF.getW xe
@@ -198,8 +198,8 @@ solve putLog csp = do
     let procLit (CL x op y) = do
             xe <- UF.find x
             doOp "" xe op y
-        procLit (CLAnnotate s CV {}) =  return ()
-        procLit CV {} = return ()
+        procLit (CLAnnotate s CV {}) =  pure ()
+        procLit CV {} = pure ()
         procLit (CLAnnotate s cr) =  putLog s >>  procLit cr
 
         doOp lvl ve op l = do
@@ -207,15 +207,15 @@ solve putLog csp = do
             putLog $ lvl ++ "Constraining: " ++ show (fromElement ve) ++ show op ++ show l
             vw <- getW ve
             case (op,vw) of
-                (_,R c) | check op c l -> return ()
+                (_,R c) | check op c l -> pure ()
                         | otherwise -> fail $ "UnionSolve: constraint doesn't match (" ++ show c ++ show op ++ show l ++ ") when setting " ++ show (fromElement ve)
                 (OpEq,Ri ml lb mu ub) | testBoundLT ml l && testBoundGT mu l -> do
                     updateW (const (R l)) ve
                     mapM_ (\v -> doOp' v OpLte l) (Set.toList lb)
                     mapM_ (\v -> doOp' v OpGte l) (Set.toList ub)
                 (OpEq,_) | otherwise -> fail $ "UnionSolve: setValue " ++ show (fromElement ve,vw,l)
-                (OpLte,Ri _ _ (Just n) _) | n `lte` l -> return ()
-                (OpGte,Ri (Just n) _ _ _) | l `lte` n -> return ()
+                (OpLte,Ri _ _ (Just n) _) | n `lte` l -> pure ()
+                (OpGte,Ri (Just n) _ _ _) | l `lte` n -> pure ()
                 (OpLte,Ri (Just n) _ _ _) | n `eq` l -> doOp' ve OpEq l
                 (OpGte,Ri _ _ (Just n) _) | n `eq` l -> doOp' ve OpEq l
                 (OpLte,Ri (Just n) _ _ _) | l `lte` n -> fail $ "UnionSolve: lower than lower bound  " ++ show (fromElement ve,vw,l,n)
@@ -245,7 +245,7 @@ solve putLog csp = do
         checkRS (Ri  _ _ (Just u) _) xe | isBottom u = do
             putLog $ "Going down: " ++ show (fromElement xe)
             doOp "&" xe OpEq u
-        checkRS r xe = return ()
+        checkRS r xe = pure ()
         doUpdate r xe = do
             updateW (const r) xe
             checkRS r xe
@@ -260,15 +260,15 @@ solve putLog csp = do
         e <- find e
         w <- getW e
         rr <- case w of
-            R v -> return (ResultJust (fromElement e) v)
+            R v -> pure (ResultJust (fromElement e) v)
             Ri ml lb mu ub -> do
                 ub <- fmap (map fromElement . Set.toList) $ finds ub
                 lb <- fmap (map fromElement . Set.toList) $ finds lb
-                return (ResultBounded { resultRep = fromElement e, resultUB = mu, resultLB = ml, resultLBV = lb, resultUBV = ub })
+                pure (ResultBounded { resultRep = fromElement e, resultUB = mu, resultLB = ml, resultLBV = lb, resultUBV = ub })
         let aa = fromElement e
-        return ((a,aa),(aa,rr))
+        pure ((a,aa),(aa,rr))
     let (ma,mb) = unzip rs
-    return (Map.fromList ma,Map.fromList mb)
+    pure (Map.fromList ma,Map.fromList mb)
 
 -----------------------------------------------------------
 -- The data type the results of the analysis are placed in.

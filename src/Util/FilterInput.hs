@@ -16,11 +16,11 @@ filterInput prog args ifh = do
     (rExit, rStdout, _) <- readProcessWithExitCode prog args input
     length rStdout `seq` when (rExit /= ExitSuccess) $
       putErrDie (prog ++ " exited abnormally")
-    return rStdout
+    pure rStdout
 
 readSystem :: String -> [String] -> IO LBS.ByteString
 readSystem prog args = do
     (rExit, rStdout, _) <- readProcessWithExitCode prog args ""
     when (rExit /= ExitSuccess) $
       putErrDie (printf "'%s' exited abnormally (%s)" (intercalate " " (prog:args)) (show rExit))
-    return $ LBS.pack rStdout
+    pure $ LBS.pack rStdout

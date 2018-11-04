@@ -38,8 +38,8 @@ readLine prompt tabExpand =  do
     s <- readline prompt
     case s of
         Nothing -> putStrLn "Bye!" >> exitSuccess
-        Just cs | all isSpace cs -> return ""
-        Just s -> addHistory s >> return s
+        Just cs | all isSpace cs -> pure ""
+        Just s -> addHistory s >> pure s
 #endif
 
 
@@ -103,7 +103,7 @@ emptyInteract = Interact {
     interactSettables = [],
     interactVersion = "(none)",
     interactSet = Map.empty,
-    interactExpr = \i s -> putStrLn ("Unknown Command: " ++ s) >> return i,
+    interactExpr = \i s -> putStrLn ("Unknown Command: " ++ s) >> pure i,
     interactRC = [],
     interactWords = [],
     interactEcho = False,
@@ -115,7 +115,7 @@ emptyInteract = Interact {
 cleanupWhitespace s = reverse $ dropWhile isSpace (reverse $ dropWhile isSpace s)
 
 runInteractions :: Interact -> [String] -> IO Interact
-runInteractions act [] = return act
+runInteractions act [] = pure act
 runInteractions act (x:xs) = do
     act' <- runInteraction act x
     runInteractions act' xs
@@ -141,43 +141,43 @@ runInteraction act s = do
             when (not $ null set) $ putStrLn "Set options:" >> putStr (unlines set)
             when (not $ null setable) $ putStrLn "Setable options:" >> putStr (unlines setable)
     case basicParse (interactComment act) (if interactCommandMode act then ':':s else s) of
-        Right "" -> return act
-        Right ('!':rest) -> systemCompat rest >> return act
+        Right "" -> pure act
+        Right ('!':rest) -> systemCompat rest >> pure act
         Right s -> do
             when (interactEcho act) $ putStrLn $ (interactPrompt act) ++ s
             act' <- interactExpr act act s
-            return act'
+            pure act'
         Left (cmd,arg) -> case fsts $ args cmd of
             [":quit"] -> putStrLn "Bye!" >> exitSuccess
-            [":help"] -> putStrLn help_text >> return act
-            [":version"] -> putStrLn (interactVersion act) >> return act
-            [":echo"] -> putStrLn arg >> return act
+            [":help"] -> putStrLn help_text >> pure act
+            [":version"] -> putStrLn (interactVersion act) >> pure act
+            [":echo"] -> putStrLn arg >> pure act
 #ifndef USE_HASKELINE
-            [":addhist"] -> addHistory arg >> return act
+            [":addhist"] -> addHistory arg >> pure act
 #endif
-            [":cd"] -> iocatch (setCurrentDirectory arg) (\_ -> putStrLn $ "Could not change to directory: " ++ arg) >> return act
-            [":pwd"] -> (iocatch getCurrentDirectory (\_ -> putStrLn "Could not get current directory." >> return "") >>= putStrLn)  >> return act
+            [":cd"] -> iocatch (setCurrentDirectory arg) (\_ -> putStrLn $ "Could not change to directory: " ++ arg) >> pure act
+            [":pwd"] -> (iocatch getCurrentDirectory (\_ -> putStrLn "Could not get current directory." >> pure "") >>= putStrLn)  >> pure act
             [":set"] -> case simpleUnquote arg of
-                [] -> showSet >> return act
+                [] -> showSet >> pure act
                 rs -> do
                     let ts = [ let (a,b) = span (/= '=') x in (cleanupWhitespace a,drop 1 b) | x <- rs ]
                     sequence_ [ putStrLn $ "Unknown option: " ++ a | (a,_) <- ts, a `notElem` interactSettables act]
-                    return act { interactSet = Map.fromList [ x | x@(a,_) <- ts, a `elem` interactSettables act ] `Map.union` interactSet act }
-            [":unset"] -> return act { interactSet = interactSet act Map.\\ Map.fromList [ (cleanupWhitespace rs,"") | rs <- simpleUnquote arg] }
+                    pure act { interactSet = Map.fromList [ x | x@(a,_) <- ts, a `elem` interactSettables act ] `Map.union` interactSet act }
+            [":unset"] -> pure act { interactSet = interactSet act Map.\\ Map.fromList [ (cleanupWhitespace rs,"") | rs <- simpleUnquote arg] }
             [":execfile"] -> do
-                fc <- iocatch (readFile arg) (\_ -> putStrLn ("Could not read file: " ++ arg) >> return "")
+                fc <- iocatch (readFile arg) (\_ -> putStrLn ("Could not read file: " ++ arg) >> pure "")
                 act <- runInteractions act { interactEcho = True } (lines fc)
-                return act { interactEcho = False }
+                pure act { interactEcho = False }
             [":execfile!"] -> do
-                fc <- iocatch (readFile arg) (\_ -> return "")
+                fc <- iocatch (readFile arg) (\_ -> pure "")
                 runInteractions act { interactEcho = True } (lines fc)
-            [":command"] -> return act { interactCommandMode = True }
-            [":normal"] -> return act {interactCommandMode = False }
+            [":command"] -> pure act { interactCommandMode = True }
+            [":normal"] -> pure act {interactCommandMode = False }
             [m] -> let [a] =  [ a | InteractCommand { commandName = n, commandAction = a } <-  interactCommands act, n == m] in do
                 act' <- a act m arg
-                return act'
-            (_:_:_) -> putStrLn "Ambiguous command, possibilites are:" >> putStr  (unlines $ buildTableLL $ args cmd) >> return act
-            [] -> (putStrLn $ "Unknown command (use :help for help): " ++ cmd)  >> return act
+                pure act'
+            (_:_:_) -> putStrLn "Ambiguous command, possibilites are:" >> putStr  (unlines $ buildTableLL $ args cmd) >> pure act
+            [] -> (putStrLn $ "Unknown command (use :help for help): " ++ cmd)  >> pure act
 
 
 -- | begin interactive interaction
@@ -185,15 +185,15 @@ runInteraction act s = do
 beginInteraction :: Interact -> IO ()
 beginInteraction act = do
     hist <- case interactHistFile act of
-        Nothing -> return Nothing
+        Nothing -> pure Nothing
         Just fn -> do
-            ch <- iocatch (readFile fn >>= return . lines) (\_ -> return [])
+            ch <- iocatch (readFile fn >>= pure . lines) (\_ -> pure [])
             let cl = (map head $ group ch)
 #ifndef USE_HASKELINE
             mapM_ addHistory cl
 #endif
             putStrLn $ show (length cl) ++ " lines of history added from " ++ fn
-            iocatch (openFile fn AppendMode >>= return . Just) (\_ -> return Nothing)
+            iocatch (openFile fn AppendMode >>= pure . Just) (\_ -> pure Nothing)
 #if defined(USE_HASKELINE)
     bracketOnError (initializeInput $ setComplete noCompletion defaultSettings)
             cancelInput -- This will only be called if an exception such
@@ -215,13 +215,11 @@ beginInteraction act = do
         let commands' = commands ++ [ (n,h) | InteractCommand { commandName = n, commandHelp = h } <- interactCommands act ]
             args s =  [ bb | bb@(n,_) <- commands', s `isPrefixOf` n ]
             expand s = snub $ fsts (args s) ++ filter (isPrefixOf s) (interactSettables act ++ interactWords act)
-        s <- readLine (thePrompt act) (return . expand)
+        s <- readLine (thePrompt act) (pure . expand)
         case (hist,s) of
             (Just h,(_:_)) -> do
-                iocatch (hPutStrLn h s >> hFlush h) (const (return ()))
-            _ -> return ()
+                iocatch (hPutStrLn h s >> hFlush h) (const (pure ()))
+            _ -> pure ()
         act' <- runInteraction act s
         go hist act'
 #endif
-
-

@@ -167,21 +167,21 @@ transitiveReductionAM arr = do
         forM_ (range bnds) $ \ (i,j) -> do
             if farr!(k,i) && farr!(i,j) then
                 writeArray arr (k,j) False
-             else return ()
+             else pure ()
 
 toAdjacencyMatrix :: G.Graph -> ST s (AdjacencyMatrix s)
 toAdjacencyMatrix g = do
     let (0,max_v) = bounds g
     arr <- newArray ((0,0),(max_v,max_v)) False :: ST s (STArray s (Vertex,Vertex) Bool)
     sequence_ [ writeArray arr (v,u) True | (v,vs) <- assocs g, u <- vs ]
-    return arr
+    pure arr
 
 fromAdjacencyMatrix :: AdjacencyMatrix s -> ST s G.Graph
 fromAdjacencyMatrix arr = do
     bnds@(_,(max_v,_)) <- getBounds arr
     rs <- getAssocs arr
     let rs' = [ x | (x,True) <- rs ]
-    return (listArray (0,max_v) [ [ v | (n',v) <- rs', n == n' ] | n <- [ 0 .. max_v] ])
+    pure (listArray (0,max_v) [ [ v | (n',v) <- rs', n == n' ] | n <- [ 0 .. max_v] ])
 
 transitiveClosure :: Graph n -> Graph n
 transitiveClosure (Graph g ns) = let g' = runST (tc g) in (Graph g' ns) where
@@ -214,15 +214,13 @@ mapGraph f (Graph gr nr) = runST $ do
     mnr <- thaw nr  :: ST s (STArray s Vertex a)
     mnr <- mapArray Left mnr
     let g i = readArray mnr i >>= \v -> case v of
-            Right m -> return m
+            Right m -> pure m
             Left l -> mdo
                 writeArray mnr i (Right r)
                 rs <- mapM g (gr!i)
                 let r = f l rs
-                return r
+                pure r
     mapM_ g (range $ bounds nr)
     mnr <- mapArray fromRight mnr
     mnr <- unsafeFreeze mnr
-    return (Graph gr mnr)
-
-
+    pure (Graph gr mnr)

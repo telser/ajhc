@@ -58,7 +58,7 @@ runNameMT (NameMT x) = liftM fst $ runStateT x (Set.empty,Set.empty)
 runNameMT' :: (Monad m) => NameMT a1 m a -> m (a,Set.Set a1)
 runNameMT' (NameMT x) = do
     (r,(used,bound)) <- runStateT x (Set.empty,Set.empty)
-    return (r,bound)
+    pure (r,bound)
 
 fromNameMT :: NameMT n m a -> StateT (Set.Set n, Set.Set n) m a
 fromNameMT (NameMT x) = x
@@ -71,7 +71,7 @@ instance (GenName n,Ord n,Monad m) => NameMonad n (NameMT n m) where
         modify (\ (used,bound) -> (nset `Set.union` used, nset `Set.union` bound) )
     uniqueName n = NameMT $ do
         (used,bound) <- get
-        if n `Set.member` bound then fromNameMT newName else put (Set.insert n used,Set.insert n bound) >> return n
+        if n `Set.member` bound then fromNameMT newName else put (Set.insert n used,Set.insert n bound) >> pure n
     newNameFrom vs = NameMT $ do
         (used,bound) <- get
         let f (x:xs)
@@ -80,7 +80,7 @@ instance (GenName n,Ord n,Monad m) => NameMonad n (NameMT n m) where
             f [] = error "newNameFrom: finite list!"
             nn = f vs
         put (Set.insert nn used, Set.insert nn bound)
-        return nn
+        pure nn
     newName  = NameMT $ do
         (used,bound) <- get
         fromNameMT $ newNameFrom  (genNames (Set.size used `mixInt` Set.size bound))
@@ -100,4 +100,3 @@ mixInt x y = hashInt x - hashInt y
 
 mixInt3 :: Int -> Int -> Int -> Int
 mixInt3 x y z = (hashInt x - hashInt y) `xor` hashInt z
-

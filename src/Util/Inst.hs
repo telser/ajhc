@@ -16,7 +16,7 @@ import Data.Traversable
 
 instance Monoid (IO ()) where
     mappend a b = a >> b
-    mempty = return ()
+    mempty = pure ()
 
 instance Monoid Bool where
     mempty = False

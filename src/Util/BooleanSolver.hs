@@ -53,7 +53,7 @@ instance Functor CL where
     fmap f (x `Cimplies` y) = fmap f x `Cimplies` fmap f y
 
 instance FunctorM CL where
-    fmapM f (x `Cimplies` y) = return Cimplies `ap` (fmapM f x) `ap` (fmapM f y)
+    fmapM f (x `Cimplies` y) = pure Cimplies `ap` (fmapM f x) `ap` (fmapM f y)
 
 
 instance Functor CV where
@@ -63,8 +63,8 @@ instance Functor CV where
 
 instance FunctorM CV where
     fmapM f (CJust x) = liftM CJust (f x)
-    fmapM _ CTrue = return CTrue
-    fmapM _ CFalse = return CFalse
+    fmapM _ CTrue = pure CTrue
+    fmapM _ CFalse = pure CFalse
 
 
 
@@ -109,17 +109,17 @@ readValue (CA v) = liftIO $ do
     v <- find v
     w <- getW v
     case w of
-        CTrue -> return ResultJust { resultValue = True }
-        CFalse -> return ResultJust { resultValue = False }
+        CTrue -> pure ResultJust { resultValue = True }
+        CFalse -> pure ResultJust { resultValue = False }
         (CJust (Ri x y)) -> do
             x <- findSet x
             y <- findSet y
-            return (ResultBounded (CA v) (map CA $ Set.toList x) (map CA $ Set.toList y))
+            pure (ResultBounded (CA v) (map CA $ Set.toList x) (map CA $ Set.toList y))
 
 
 
 findSet :: Set.Set (Element a b) -> IO (Set.Set (Element a b))
-findSet xs = mapM find (Set.toList xs) >>= return . Set.fromList
+findSet xs = mapM find (Set.toList xs) >>= pure . Set.fromList
 
 
 mkCA :: MonadIO m => v -> m (CA v)
@@ -133,14 +133,14 @@ groundConstraints (C cs) = liftIO $ do
         nv v = do
             r <- readIORef ref
             case Map.lookup v r of
-                Just v -> return v
+                Just v -> pure v
                 Nothing -> do
                     e <- liftM CA $ new (CJust (Ri mempty mempty)) v
                     writeIORef ref (Map.insert v e r)
-                    return e
+                    pure e
     v <- fmapM (fmapM nv) ccs
     rr <- readIORef ref
-    return (C (v ++),rr)
+    pure (C (v ++),rr)
 
 
 
@@ -149,23 +149,23 @@ processConstraints :: (Show v,MonadIO m)
     -> C (CA v)  -- ^ the input
     -> m ()
 processConstraints propagateSets (C cs) = mapM_ prule (cs []) where
-    prule (CFalse `Cimplies` _) = return ()
-    prule (_ `Cimplies` CTrue) = return ()
+    prule (CFalse `Cimplies` _) = pure ()
+    prule (_ `Cimplies` CTrue) = pure ()
     prule (CTrue `Cimplies` CFalse) = fail "invalid constraint: T -> F"
     prule (CTrue `Cimplies` CJust (CA y)) = find y >>= set Nothing True
     prule (CJust (CA x) `Cimplies` CFalse) = find x >>= set Nothing False
-    prule (CJust (CA x) `Cimplies` CJust (CA y)) | x == y = return ()
+    prule (CJust (CA x) `Cimplies` CJust (CA y)) | x == y = pure ()
     prule (CJust (CA x) `Cimplies` CJust (CA y)) = do x <- find x; y <- find y; pimp x y
     pimp' :: (MonadIO m,Show a) => RS a -> RS a -> m ()
     pimp' x y = do x <- find x; y <- find y; pimp x y
-    pimp x y | x == y = return ()
+    pimp x y | x == y = pure ()
     pimp x y = do
         xv <- getW x
         yv <- getW y
         case (xv,yv) of
             (CJust ra,CJust rb) -> liftIO $ implies x y ra rb
-            (CFalse,_) -> return ()
-            (_,CTrue) -> return ()
+            (CFalse,_) -> pure ()
+            (_,CTrue) -> pure ()
             (CTrue,CFalse) -> fail $ "invalid constraint T -> F: " ++ show x ++ " -> " ++ show y
             (CTrue,CJust _) -> set (Just x) True y
             (CJust _,CFalse) -> set (Just y) False x
@@ -173,8 +173,8 @@ processConstraints propagateSets (C cs) = mapM_ prule (cs []) where
     set mu b xe = do
         w <- getW xe
         case (w,b) of
-            (CTrue,True) -> return ()
-            (CFalse,False) -> return ()
+            (CTrue,True) -> pure ()
+            (CFalse,False) -> pure ()
             (CJust (Ri _ sh),True) -> do putW xe CTrue; mapM_ (set mu True) (Set.toList sh)
             (CJust (Ri sl _),False) -> do putW xe CFalse; mapM_ (set mu False) (Set.toList sl)
             _ -> fail $ "invalid constrant: " ++ show xe ++ " := " ++ show b
@@ -185,18 +185,18 @@ processConstraints propagateSets (C cs) = mapM_ prule (cs []) where
         ra@(Ri xl xh) <- findRi xe ra
         rb@(Ri yl yh) <- findRi ye rb
         if xe `Set.member` yh then liftIO $ equals xe ye ra rb else do
-        if xe `Set.member` yl then return () else do
+        if xe `Set.member` yl then pure () else do
         if ye `Set.member` xl then liftIO $ equals xe ye ra rb else do
-        if ye `Set.member` xh then return () else do
+        if ye `Set.member` xh then pure () else do
         putW xe (CJust $ Ri xl (Set.insert ye xh))
         putW ye (CJust $ Ri (Set.insert xe yl) yh)
         when propagateSets $ mapM_ (pimp' xe) (Set.toList yh)
         when propagateSets $ mapM_ (flip pimp' ye) (Set.toList xl)
-        return ()
+        pure ()
     findRi x (Ri l h) = do
         l <- liftM Set.fromList (mapM find (Set.toList l))
         h <- liftM Set.fromList (mapM find (Set.toList h))
-        return (Ri l h)
+        pure (Ri l h)
     equals xe ye (Ri xl xh) (Ri yl yh) = do
         let nl = (xl `mappend` yl)
         let nh = (xh `mappend` yh)
@@ -210,8 +210,8 @@ processConstraints propagateSets (C cs) = mapM_ prule (cs []) where
                 CJust ri <- getW ne
                 ri <- findRi ne ri
                 equals xe ne (Ri nl nh) ri
-            return ()
-        return () :: IO ()
+            pure ()
+        pure () :: IO ()
 
 
 
@@ -243,4 +243,3 @@ showResult rb@ResultBounded {} = sb (resultLB rb) ++ " <= " ++ show (resultRep r
 
 collectVars (Cimplies x y:xs) = x:y:collectVars xs
 collectVars [] = []
-

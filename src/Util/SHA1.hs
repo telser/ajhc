@@ -70,7 +70,7 @@ sha1Bytes ss = System.IO.Unsafe.unsafePerformIO $ do
     let ptr' = castPtr ptr
     unless big_endian $ fiddle_endianness ptr' plen
     res <- sha1_step_4_main abcde ptr' plen
-    return res
+    pure res
 
 
 {-# NOINLINE sha1Handle #-}
@@ -78,7 +78,7 @@ sha1Handle :: Handle -> IO Hash
 sha1Handle h = do
     hSeek h AbsoluteSeek 0
     len <- hFileSize h
-    len <- return $ fromIntegral len
+    len <- pure $ fromIntegral len
     let plen = sha1_step_1_2_plength len
     allocaBytes plen $ \ptr -> do
     cnt <- hGetBuf h ptr len
@@ -90,7 +90,7 @@ sha1Handle h = do
     let ptr' = castPtr ptr
     unless big_endian $ fiddle_endianness ptr' plen
     res <- sha1_step_4_main abcde ptr' plen
-    return res
+    pure res
 
 {-# NOINLINE sha1file #-}
 sha1file :: FilePath -> IO Hash
@@ -98,19 +98,19 @@ sha1file fp = do
     h   <- openBinaryFile fp ReadMode
     hash <- sha1Handle h
     hClose h
-    return hash
+    pure hash
 
 big_endian = System.IO.Unsafe.unsafePerformIO $ do
     let x :: Word32
         x = 0x12345678
     s <- with x $ \ptr -> peekCStringLen (castPtr ptr,4)
     case s of
-      "\x12\x34\x56\x78" -> return True
-      "\x78\x56\x34\x12" -> return False
+      "\x12\x34\x56\x78" -> pure True
+      "\x78\x56\x34\x12" -> pure False
       _                  -> error "Testing endianess failed"
 
 fiddle_endianness :: Ptr Word32 -> Int -> IO ()
-fiddle_endianness p 0 = p `seq` return ()
+fiddle_endianness p 0 = p `seq` pure ()
 fiddle_endianness p n
  = do x <- peek p
       poke p $ shiftL x 24
@@ -147,7 +147,7 @@ sha1_step_3_init :: ABCDE
 sha1_step_3_init = ABCDE 0x67452301 0xefcdab89 0x98badcfe 0x10325476 0xc3d2e1f0
 
 sha1_step_4_main :: ABCDE -> Ptr Word32 -> Int -> IO ABCDE
-sha1_step_4_main abcde _ 0 = return $! abcde
+sha1_step_4_main abcde _ 0 = pure $! abcde
 sha1_step_4_main (ABCDE a0@a b0@b c0@c d0@d e0@e) s len
     = do
          (e, b) <- doit f1 0x5a827999 (x 0) a b c d e
@@ -248,11 +248,11 @@ sha1_step_4_main (ABCDE a0@a b0@b c0@c d0@d e0@e) s len
                 x3 <- peek (s `advancePtr` ((n - 3) .&. 15))
                 let res = rotateL (x0 `xor` x1 `xor` x2 `xor` x3) 1
                 poke base res
-                return res
+                pure res
        {-# INLINE doit #-}
        doit f k i a b c d e = a `seq` c `seq`
            do i' <- i
-              return (rotateL a 5 + f (XYZ b c d) + e + i' + k,
+              pure (rotateL a 5 + f (XYZ b c d) + e + i' + k,
                       rotateL b 30)
 
 hashToBytes :: Hash -> [Word8]
@@ -270,11 +270,10 @@ instance Show ABCDE where
     showsPrec _ (ABCDE a b c d e) = showAsHex a . showAsHex b . showAsHex c . showAsHex d . showAsHex e
 
 showAsHex :: Word32 -> ShowS
-showAsHex n = showIt 8 n
+showAsHex = showIt 8
    where
     showIt :: Int -> Word32 -> String -> String
     showIt 0 _ r = r
     showIt i x r = case quotRem x 16 of
                        (y, z) -> let c = intToDigit (fromIntegral z)
                                  in c `seq` showIt (i-1) y (c:r)
-

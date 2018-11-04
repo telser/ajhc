@@ -29,18 +29,18 @@ newtype Once a = Once (IORef (Maybe a))
 newOnce :: IO (Once a)
 newOnce = do
     ref <- newIORef Nothing
-    return (Once ref)
+    pure (Once ref)
 
 -- | execute the action at most once, always returning the same result
 runOnce :: Once a -> IO a -> IO a
 runOnce (Once ref) action = do
     b <- readIORef ref
     case b of
-        Just x -> return x
+        Just x -> pure x
         Nothing -> do
             r <- action
             writeIORef ref (Just r)
-            return r
+            pure r
 
 -- | run first argument once, after which perform the second
 
@@ -63,17 +63,17 @@ newtype OnceMap a b = OnceMap (IORef (Map.Map a b))
 newOnceMap :: Ord a => IO (OnceMap a b)
 newOnceMap = do
     r <- newIORef Map.empty
-    return $ OnceMap r
+    pure $ OnceMap r
 
 runOnceMap :: Ord a => OnceMap a b -> a -> IO b -> IO b
 runOnceMap (OnceMap r) x act = do
     m <- readIORef r
     case Map.lookup x m of
-        Just y -> return y
+        Just y -> pure y
         Nothing -> do
             y <- act
             modifyIORef r (Map.insert x y)
-            return y
+            pure y
 
 altOnceMap :: Ord a => OnceMap a () -> a -> IO b -> IO b -> IO b
 altOnceMap (OnceMap ref) x first after = do
@@ -87,15 +87,14 @@ altOnceMap (OnceMap ref) x first after = do
 onceMapToList :: OnceMap a b -> IO [(a,b)]
 onceMapToList (OnceMap ref) = do
     m <- readIORef ref
-    return $ Map.toList m
+    pure $ Map.toList m
 
 onceMapKeys :: OnceMap a b -> IO [a]
 onceMapKeys (OnceMap ref) = do
     m <- readIORef ref
-    return $ Map.keys m
+    pure $ Map.keys m
 
 onceMapElems :: OnceMap a b -> IO [b]
 onceMapElems (OnceMap ref) = do
     m <- readIORef ref
-    return $ Map.elems m
-
+    pure $ Map.elems m

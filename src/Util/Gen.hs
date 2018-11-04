@@ -14,11 +14,11 @@ import GenUtil hiding(replicateM, intercalate)
 mconcatMap f xs = mconcat (map f xs)
 mintercalate x xs = mconcat (intersperse x xs)
 
-mconcatMapM f xs = mapM f xs >>= return . mconcat
+mconcatMapM f xs = mapM f xs >>= pure . mconcat
 
 runReadP :: Monad m => ReadP a -> String -> m a
 runReadP rp s = case [ x | (x,t) <- readP_to_S rp s, ("","") <- lex t] of
-    [x] -> return x
+    [x] -> pure x
     []  -> fail "runReadP: no parse"
     _   -> fail "runReadP: ambiguous parse"
 
@@ -40,9 +40,9 @@ shortenPath x@('/':_) = do
     h <- getHomeDirectory
     let f d = do
             '/':rest <- getPrefix d x
-            return rest
-    return $ fromMaybe x $ f cd <|> (>>=f) pwd <|> liftM ("~/" ++) (f h)
-shortenPath x = return x
+            pure rest
+    pure $ fromMaybe x $ f cd <|> (>>=f) pwd <|> liftM ("~/" ++) (f h)
+shortenPath x = pure x
 
 maybeDo :: Monad m => Maybe (m a) -> (m ())
-maybeDo x = maybe (return ()) (>> return ()) x
+maybeDo x = maybe (pure ()) (>> pure ()) x

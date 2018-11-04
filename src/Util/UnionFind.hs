@@ -26,7 +26,7 @@ new :: MonadIO m => w -> a -> m (Element w a)
 new w x = liftIO $  do
     r <- newIORef (Weight 1 w)
     n <- newUnique
-    return $ Element x n r
+    pure $ Element x n r
 
 new_ :: MonadIO m => a -> m (Element () a)
 new_ x = new () x
@@ -35,17 +35,17 @@ find :: MonadIO m => Element w a -> m (Element w a)
 find x@(Element a _ r) = liftIO $  do
     e <- readIORef r
     case e of
-        Weight _ _ -> return x
+        Weight _ _ -> pure x
         Next next -> do
             last <- Util.UnionFind.find next
             when (next /= last) $ writeIORef r (Next last)
-            return last
+            pure last
 
 getW :: MonadIO m => Element w a -> m w
 getW x = liftIO $ do
     Element _ _ r <- find x
     Weight _ w <- readIORef  r
-    return w
+    pure w
 
 updateW :: MonadIO m => (w -> w) -> Element w a -> m ()
 updateW f x = liftIO $ do

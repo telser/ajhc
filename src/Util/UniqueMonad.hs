@@ -12,7 +12,7 @@ import Control.Monad.Identity
 instance UniqueProducer IO where
     newUniq = do
         u <- newUnique
-        return $ hashUnique u
+        pure $ hashUnique u
 
 instance Monad m =>  UniqueProducer (UniqT m) where
     newUniq = UniqT $ do
